@@ -174,3 +174,47 @@ test('receipt rename/move is repeatable and preserves its Drive ID', () => {
   assert.equal(receipt.name, '1.png'); assert.equal(receipt.folder, person.receiptFolderId);
   assert.equal(env.files.get('receipt-file'), receipt);
 });
+
+test('an unrelated Voucher tab is preserved without blocking later claims or retries', () => {
+  const env = environment();
+  const person = env.ports.ensurePerson(env.record);
+  let week = env.ports.ensureWeek(env.record, person);
+  env.ports.renderWeek(week, env.payload(1));
+  const book = env.books.get(week.fileId);
+  book.getSheetByName('Voucher').setName('Previous generated voucher');
+  const notes = book.insertSheet('Voucher');
+  notes.getRange('A1').setValue('Finance notes');
+
+  week = env.ports.ensureWeek(env.record, person);
+  env.ports.renderWeek(week, env.payload(2));
+  assert.equal(book.getSheetByName('Voucher'), notes);
+  assert.equal(notes.getRange('A1').getValue(), 'Finance notes');
+  const generated = book.getSheetByName('Voucher (2)');
+  assert.equal(book.active, generated);
+  assert.equal(generated.getRange('B12').getValue(), 4);
+
+  week = env.ports.ensureWeek(env.record, person);
+  const revision = week.revision;
+  env.ports.renderWeek(week, env.payload(2));
+  assert.equal(book.active, generated);
+  assert.equal(week.revision, revision);
+  assert.equal(notes.getRange('A1').getValue(), 'Finance notes');
+
+  week = env.ports.ensureWeek(env.record, person);
+  env.ports.renderWeek(week, env.payload(3));
+  assert.equal(book.getSheetByName('Voucher'), notes);
+  assert.notEqual(book.active, generated);
+  assert.equal(book.active.getName(), 'Voucher (2)');
+});
+
+test('generated voucher names skip occupied suffixes and case variants', () => {
+  const env = environment();
+  const person = env.ports.ensurePerson(env.record);
+  const week = env.ports.ensureWeek(env.record, person);
+  const book = env.books.get(week.fileId);
+  const notes = ['voucher', 'Voucher (2)', 'VOUCHER (3)'].map(name => book.insertSheet(name));
+
+  env.ports.renderWeek(week, env.payload(1));
+  assert.equal(book.active.getName(), 'Voucher (4)');
+  for (const sheet of notes) assert.equal(book.getSheetByName(sheet.getName()), sheet);
+});

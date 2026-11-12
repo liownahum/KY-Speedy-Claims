@@ -40,7 +40,7 @@ function environment() {
   const register = { getId: () => 'register-id', getSheets: () => [{ setName() {} }] };
   const store = { records: () => [] };
   const context = vm.createContext({
-    PropertiesService: { getScriptProperties: () => ({ getProperty: key => properties.get(key) ?? null, setProperty(key, value) { properties.set(key, value); } }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: key => properties.get(key) ?? null, setProperty(key, value) { calls.push(['property', key, value]); properties.set(key, value); } }) },
     LockService: { getScriptLock: () => ({ waitLock() { calls.push(['lock']); }, releaseLock() { calls.push(['unlock']); } }) },
     Utilities: { getUuid: () => 'unique-id', formatDate: () => '2026-11-12' },
     DriveApp: {
@@ -177,4 +177,90 @@ test('replay is bounded to ten pending submissions per manual run', () => {
   env.form.responses = Array.from({ length: 12 }, (_, index) => ({ getId: () => 'r' + index }));
   env.context.processClaimResponse_ = () => ({ status: 'DONE' });
   assert.equal(env.context.retryPendingClaimSubmissions().length, 10);
+});
+
+test('repeated validation failures do not starve later pending submissions', () => {
+  const env = environment();
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  env.form.responses = Array.from({ length: 12 }, (_, index) => ({ getId: () => 'r' + index }));
+  const completed = new Set();
+  env.store.records = () => [...completed].map(id => ({ id, status: 'DONE' }));
+  env.context.processClaimResponse_ = response => {
+    const id = response.getId();
+    if (Number(id.slice(1)) < 10) throw new Error('Invalid input requires review');
+    completed.add(id);
+    return { status: 'DONE' };
+  };
+
+  const first = env.context.retryPendingClaimSubmissions();
+  assert.equal(first.length, 10);
+  assert.ok(first.every(result => result.status === 'ERROR'));
+  const second = env.context.retryPendingClaimSubmissions();
+  assert.equal(second.length, 10);
+  assert.equal(second[0].id, 'r10');
+  assert.equal(second[1].id, 'r11');
+  assert.deepEqual([...completed], ['r10', 'r11']);
+
+  // Cursor writes, including failed attempts, share the processing lock.
+  let locked = false;
+  let cursorWrites = 0;
+  for (const call of env.calls) {
+    if (call[0] === 'lock') locked = true;
+    if (call[0] === 'unlock') locked = false;
+    if (call[0] === 'property' && call[1] === 'KY_CLAIM_RETRY_CURSOR') {
+      assert.equal(locked, true);
+      cursorWrites++;
+    }
+  }
+  assert.equal(cursorWrites, 20);
+});
+
+test('retry rotation wraps around without attempting the same response twice in a batch', () => {
+  const env = environment();
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  env.form.responses = Array.from({ length: 12 }, (_, index) => ({ getId: () => 'r' + index }));
+  env.properties.set('KY_CLAIM_RETRY_CURSOR', 'r9');
+  env.context.processClaimResponse_ = () => { throw new Error('Still needs review'); };
+
+  const results = env.context.retryPendingClaimSubmissions();
+  assert.deepEqual(Array.from(results, result => result.id), ['r10', 'r11', 'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7']);
+  assert.equal(env.properties.get('KY_CLAIM_RETRY_CURSOR'), 'r7');
+});
+
+test('a completed cursor response keeps its position while completed claims are skipped', () => {
+  const env = environment();
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  env.form.responses = ['r0', 'r1', 'r2', 'r3', 'r4'].map(id => ({ getId: () => id }));
+  env.properties.set('KY_CLAIM_RETRY_CURSOR', 'r2');
+  env.store.records = () => [{ id: 'r2', status: 'DONE' }, { id: 'r3', status: 'DONE' }];
+  env.context.processClaimResponse_ = () => ({ status: 'DONE' });
+
+  const results = env.context.retryPendingClaimSubmissions();
+  assert.deepEqual(Array.from(results, result => result.id), ['r4', 'r0', 'r1']);
+  assert.equal(env.properties.get('KY_CLAIM_RETRY_CURSOR'), 'r1');
+});
+
+test('missing or deleted retry cursors safely restart at the first pending response', () => {
+  for (const cursor of [null, 'deleted-response']) {
+    const env = environment();
+    env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+    env.form.responses = ['r0', 'r1'].map(id => ({ getId: () => id }));
+    if (cursor) env.properties.set('KY_CLAIM_RETRY_CURSOR', cursor);
+    env.context.processClaimResponse_ = () => ({ status: 'DONE' });
+
+    const results = env.context.retryPendingClaimSubmissions();
+    assert.deepEqual(Array.from(results, result => result.id), ['r0', 'r1']);
+  }
+});
+
+test('empty retry batches leave the saved cursor unchanged', () => {
+  const env = environment();
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  env.properties.set('KY_CLAIM_RETRY_CURSOR', 'r0');
+  assert.equal(env.context.retryPendingClaimSubmissions().length, 0);
+  env.form.responses = [{ getId: () => 'r0' }];
+  env.store.records = () => [{ id: 'r0', status: 'DONE' }];
+  env.context.processClaimResponse_ = () => assert.fail('Completed responses must be skipped');
+  assert.equal(env.context.retryPendingClaimSubmissions().length, 0);
+  assert.equal(env.properties.get('KY_CLAIM_RETRY_CURSOR'), 'r0');
 });

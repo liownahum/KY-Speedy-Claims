@@ -1,4 +1,6 @@
 /** One test event per Apps Script project. All responses remain in Forms as well. */
+var CLAIM_RETRY_CURSOR_ = 'KY_CLAIM_RETRY_CURSOR';
+
 function claimLock_(callback) {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -154,15 +156,43 @@ function retryPendingClaimSubmissions() {
   var config = claimConfig_(true);
   if (!config.active) throw new Error('Activate the pipeline first.');
   var records = claimStore_(SpreadsheetApp.openById(config.registerId)).records();
-  var done = new Set(records.filter(function (record) { return record.status === 'DONE'; }).map(function (record) { return record.id; }));
-  var pending = FormApp.openById(config.formId).getResponses().filter(function (response) { return !done.has(response.getId()); }).slice(0, 10);
-  var results = pending.map(function (response) {
-    try { return claimLock_(function () { return { id: response.getId(), status: processClaimResponse_(response, claimConfig_(true)).status }; }); }
-    catch (error) { return { id: response.getId(), status: 'ERROR', error: String(error.message || error) }; }
-  });
+  var done = new Set(records.filter(function (record) {
+    return record.status === 'DONE';
+  }).map(function (record) { return record.id; }));
+  var responses = FormApp.openById(config.formId).getResponses();
+  var cursor = PropertiesService.getScriptProperties().getProperty(CLAIM_RETRY_CURSOR_);
+  var pending = claimPendingRetries_(responses, done, cursor);
+  var results = pending.map(claimRetryResponse_);
   console.log(JSON.stringify(results));
   return results;
 }
+
+function claimPendingRetries_(responses, done, cursor) {
+  // Rotate before filtering: a completed response can still be the cursor.
+  // A missing or deleted cursor restarts safely from the first response.
+  var start = responses.findIndex(function (response) { return response.getId() === cursor; }) + 1;
+  var ordered = responses.slice(start).concat(responses.slice(0, start));
+  return ordered.filter(function (response) { return !done.has(response.getId()); }).slice(0, 10);
+}
+
+function claimRetryResponse_(response) {
+  var id = response.getId();
+  try {
+    return claimLock_(function () {
+      try {
+        var config = claimConfig_(true);
+        if (!config.active) throw new Error('Activate the pipeline first.');
+        return { id: id, status: processClaimResponse_(response, config).status };
+      } finally {
+        // Advance even when validation fails before a Claims row is reserved.
+        PropertiesService.getScriptProperties().setProperty(CLAIM_RETRY_CURSOR_, id);
+      }
+    });
+  } catch (error) {
+    return { id: id, status: 'ERROR', error: String(error.message || error) };
+  }
+}
+
 function showClaimPipelineStatus() { return claimStatus_(claimConfig_(true)); }
 function exportLatestClaimVoucher() {
   return claimLock_(function () {

@@ -97,7 +97,18 @@ function claimFilePorts_(config, store) {
   function activateRendered(book, rendered) {
     var active = book.getSheets().find(function (sheet) { return sheet.getSheetId() === rendered.sheetId; });
     if (!active) throw new Error('Committed voucher worksheet is missing; finance review is required.');
-    if (active.getName() !== 'Voucher') active.setName('Voucher');
+    // Finance may already use the usual label for an unrelated worksheet.
+    // Keep that sheet intact and choose an available display name for ours.
+    var occupiedNames = book.getSheets().filter(function (sheet) {
+      return sheet.getSheetId() !== rendered.sheetId;
+    }).map(function (sheet) { return sheet.getName().toLowerCase(); });
+    var name = 'Voucher';
+    var suffix = 2;
+    while (occupiedNames.indexOf(name.toLowerCase()) !== -1) {
+      name = 'Voucher (' + suffix + ')';
+      suffix += 1;
+    }
+    if (active.getName() !== name) active.setName(name);
     book.setActiveSheet(active);
   }
   return { ensurePerson: ensurePerson, ensureWeek: ensureWeek, fileReceipt: fileReceipt, renderWeek: renderWeek };
