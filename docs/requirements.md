@@ -36,6 +36,7 @@ Different events have different finance ICs. Each IC needs an independent claims
 - Collect the claim's information and a receipt picture using Google Forms.
 - Find the claimant; create their named folder if it does not exist.
 - Find their spreadsheet for the relevant week; create it from the template and fill the header if needed.
+- Use the submission timestamp to choose a Monday–Sunday week in Asia/Singapore; purchase date is separate.
 - Add the new claim to that weekly document.
 - Store receipts in a receipts subfolder within the person's folder.
 - Rename the receipt using the allocated receipt number, retaining its file extension.
@@ -102,7 +103,7 @@ The IC authorises their installation under the account intended to operate the e
 - Approval, payment execution, receipt OCR, and cross-event accounting integration are not initial implementation commitments.
 - Approved/paid weeks, corrections, payment-detail changes, and duplicates need explicit rules before operational use.
 - A documentation site does not execute the Google automation.
-- See [voucher template findings](voucher-template.md) for original ranges, authorised row resizing, and export evidence. Filled-voucher PDFs, resizing, and Google Sheets conversion remain to be tested.
+- See [voucher template findings](voucher-template.md) and the [live validation record](live-validation.md) for original ranges, authorised row resizing, and successful short/long voucher export evidence. The [form pipeline](form-pipeline-test.md) is ready for manual native testing; local checks do not establish upload ownership or trigger delivery.
 
 ## Known platform constraints to validate
 
