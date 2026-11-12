@@ -6,7 +6,7 @@ The first implementation creates a separate native Google Sheets working copy of
 
 This is a developer-run prototype, not the final setup experience for finance ICs. It does not create a Google Form, install submission triggers, allocate receipt numbers, manage weekly document identities, approve claims, or send payments/emails. Sample receipt numbers are deliberately nonconsecutive to verify they survive resizing.
 
-Local automated checks pass using Google service substitutes. Live Drive conversion, native Sheets calculations, field wrapping, PDF pagination, and second-account installation have not yet been verified. Every prototype result has `needsPrintReview: true`.
+The user confirmed successful one-line and long exports in live Google Apps Script on 12 November 2026 after the import, dropdown, and PDF-header fixes. See the [live validation record](live-validation.md) for the supplied build, evidence folder, attribution, and exact scope. The long run's claim count was not specified. Second-account installation and the full native case matrix remain outstanding. Every newly generated prototype result retains `needsPrintReview: true` for its own print review.
 
 ## Files
 
@@ -15,7 +15,7 @@ Local automated checks pass using Google service substitutes. Live Drive convers
 | src/VoucherCore.js | Input validation, integer-cent totals, row/print planning, literal-text handling, synthetic data |
 | src/Voucher.gs | Template checks, row resizing, formatting, helper-list preservation, PDF response checks |
 | src/Prototype.gs | Manual synthetic run; creates a separate copy and saves a PDF |
-| src/appsscript.json | V8 runtime, Advanced Drive v3 service, and Google access scopes |
+| src/appsscript.json | V8 runtime, Advanced Drive v2 service, and Google access scopes; existing v3 configurations also work |
 
 The full-page layout is the only supported base in this prototype. Template checks reject a changed layout, occupied inputs, filled signatures, missing congregation options, and attempts to render into the source file itself.
 
@@ -23,12 +23,20 @@ The full-page layout is the only supported base in this prototype. Template chec
 
 1. Create a standalone project at [Google Apps Script](https://script.google.com/).
 2. Add the source from VoucherCore.js, Voucher.gs, and Prototype.gs as script files. The local CommonJS export guard in VoucherCore.js is inactive in Apps Script.
-3. Enable manifest visibility in Project Settings and use src/appsscript.json as the project's manifest. Confirm Advanced Drive API v3 is enabled under Services. A standard Cloud project may also require enabling Drive API in its Cloud console.
+3. Enable manifest visibility in Project Settings and use src/appsscript.json as the project's manifest. Confirm Drive API is enabled under Services with identifier Drive. The supplied manifest uses v2 to match the reported dropdown; the code also supports an existing v3 configuration. A standard Cloud project may also require enabling Drive API in its Cloud console.
 4. In Project Settings, configure the script properties below as needed. Leaving them unset uses the supplied template and creates a new prototype output folder.
 5. Run `runVoucherPrototype` and complete Google's authorisation flow under the intended developer/IC account. The function creates sample files only. Google access is not configured by merging this repository.
 6. Open the workbook and PDF links in the execution log, complete the visual checks below, and record the result.
 
 An optional clasp configuration example is included for developers who already use Google's clasp CLI. Copy .clasp.json.example to .clasp.json and supply your project ID; the actual local configuration and authentication files are ignored by Git. No particular clasp version or CLI installation is required for the editor-based workflow.
+
+For one-file setup, run `npm run bundle` to generate Code.gs, appsscript.json, and START-HERE.md under local/live-test (ignored by Git). Supply a destination with `npm run bundle -- /path/to/output`. The bundle combines the exact current source files and validates the combined script before writing it. See the [manual test guide](manual-test.md), including how to update an already-created Google project.
+
+### Drive API compatibility
+
+The initial live run reported only v2 in the service dropdown and failed at `Drive.Files.create`. That was a version mismatch: v3 exposes create, while v2 exposes insert and uses different title/parent metadata. The importer now detects the installed method before creating an output folder, uses v2 insert with `convert: true` when appropriate, and retains support for v3 create. It does not retry an upload failure through another version, which could duplicate files. Native Sheets sources continue to use DriveApp.makeCopy without requiring the Advanced Drive importer.
+
+Keep v2 if that is what the project offers; replacing the pasted Code.gs is sufficient for an existing v2 project. A missing/incompatible service fails with a setup message before output resources are created. The subsequent user-run short/long exports succeeded in the reported setup; the v3 branch and other IC accounts retain separate verification requirements.
 
 ### Script properties
 
@@ -44,14 +52,15 @@ The manifest requests Drive access to read the specified master and create files
 
 ## Row and formatting behaviour
 
-- Preserve congregation options in a hidden helper tab before deleting whole worksheet rows. Reapply validation to the final input range.
+- Preserve congregation options in a hidden helper tab before deleting whole worksheet rows. Remove imported dropdown rules from the source row-style snapshot and original input cells before resizing. After copying styles, clear any surviving rules in the final input range, bind strict congregation validation to the preserved helper, and flush before writing claim values.
 - Retain a clean input-row style before resizing, then apply it to all final input rows.
 - Delete surplus input rows or insert extra rows before the total. Rebuild the total range, retaining the official positive-total/blank behaviour.
 - Keep receipt numbers from the supplied data; never derive them from the new row position.
 - In the working copy only, merge C:F within each existing visible Description column so text can wrap across its intended width. Merge the blank name/payment input spans for the same reason. Headings, visible column divisions, and source master remain unchanged.
 - Apply conservative row heights without truncating strings. Oversized text that cannot fit the prototype's row-height bound is rejected for review rather than silently clipped.
 - Keep approval and verification input areas blank. Prototype execution is not an approval.
-- Freeze the first ten rows to repeat the voucher heading/table header in the PDF; request A4 portrait with fit-to-width, excluding other tabs and column-X helpers. Actual page breaks, repeated-heading behaviour, and keeping totals/signatures together need native visual verification.
+- Ensure the two title areas have enough height for the imported font. The source's single-row PAYMENT VOUCHER title uses a 24-point font in a 12.75-point row, which can clip after conversion/export.
+- Clear frozen rows in the working copy and disable frozen-row repetition in the PDF request. The initial combination of ten frozen header rows and a bounded PDF range is the likely source of the duplicated header seen in the one-claim PDF. Request A4 portrait with fit-to-width, excluding other tabs and column-X helpers. Repeated headings for continuation pages are intentionally disabled pending a separately verified pagination design; page breaks and totals/signature placement still need native review.
 
 Each render starts from a fresh copy. Updating an already-rendered weekly document and recovering an interrupted live submission are future processor work. Re-running the synthetic prototype creates a new sample, not an in-place update.
 
@@ -59,13 +68,15 @@ Each render starts from a fresh copy. Updating an already-rendered weekly docume
 
 Run `npm run check` and `npm test` with Node.js 20+. No npm dependencies are required. CI runs these commands on pushes and pull requests.
 
-Automated coverage includes 1, 2, 7, 8, 30, 31, and 75 claims; exact claim counts; footer movement; stable receipt IDs; cent totals; preserved congregation helpers; valid dates; literal formula-looking input; invalid/occupied templates; copy/conversion branches; unchanged source identity; and refusal to save HTTP failures or non-PDF responses as vouchers.
+Automated coverage includes 1, 2, 7, 8, 30, 31, and 75 claims; exact claim counts; footer movement; stable receipt IDs; cent totals; preserved congregation helpers; valid dates; literal formula-looking input; invalid/occupied templates; v2/v3 copy/conversion branches; setup checks before resource creation; no cross-version retry after an upload error; unchanged source identity; and refusal to save HTTP failures or non-PDF responses as vouchers.
 
 The in-memory adapter models row shifts across all columns, so tests exercise deletion of the original helper-list location as well as preservation of its separate copy. It is not a full implementation of Sheets formatting or formula recalculation. PDF response tests use synthetic bytes and do not create a rendered document.
 
+An earlier user-run live test reached rendering but rejected G11 under an old data-validation rule. The original renderer installed its replacement dropdown after writing claims. The fix installs it before writing, with explicit clearing around row/style operations. The test adapter now enforces strict dropdowns: the previous renderer reproduces the G11 rejection after row deletion, while the corrected renderer passes and still rejects unknown congregations. The later user confirmation accepts the supplied short/long export samples; it does not imply that every native case below was individually tested.
+
 ## Required native run matrix
 
-Run fresh samples with 1, 2, 7, 8, 30, 31, and 75 claims. For each run, verify:
+For a fully documented regression matrix, run fresh samples with 1, 2, 7, 8, 30, 31, and 75 claims. The one-line and an unspecified long export are already user-confirmed; the other exact counts are not inferred from that confirmation. For each run, verify:
 
 1. Source template unchanged; work created in a different file.
 2. Exactly N claim rows, with all receipt numbers and values retained.
@@ -74,7 +85,7 @@ Run fresh samples with 1, 2, 7, 8, 30, 31, and 75 claims. For each run, verify:
 5. Name, payment placeholder, description, and decimal amounts are legible without clipping.
 6. Total, Prepared by, Payment approved by, and Verified by appear below the final claim row.
 7. PDF includes only the payment voucher on A4 pages, at readable size, with no truncated claims or helper cells.
-8. Long vouchers have usable repeated headings and a usable totals/signature block. Record any awkward page break before accepting the exporter for live claims.
+8. The first page has exactly one header, and both title lines are fully visible. For longer vouchers, inspect continuation-page context and totals/signature placement. Repeated frozen headings are disabled; continuation-page headings need a separately verified design before production acceptance.
 
 After the basic matrix, test long names/descriptions and repeat under another IC account. Store test evidence privately in Drive or a local ignored directory; do not commit live financial records.
 

@@ -16,6 +16,7 @@ Use this log to preserve both the current choices and the questions that still n
 | D08 | Export payment vouchers as PDF for printing and physical submission. | User confirmed the finance department requires printed vouchers on 12 November 2026. PDF export is needed when preparing a submission. |
 | D09 | The previously described Group field means the template's Congregation field. | User explicitly selected this mapping on 12 November 2026. Preserve the official Congregation label. |
 | D10 | The weekly voucher has exactly one input row per included claim: delete unused input rows and add rows when needed. Move totals/signatures accordingly and update formula/print ranges. | User explicitly clarified that one claim needs one input row and more claims require added rows on 12 November 2026. Original row counts are not limits. |
+| D11 | Accept the supplied voucher prototype's one-line and long PDF export cases as manually validated in Google Apps Script. | User confirmed both work on 12 November 2026 and supplied the test folder. See the live validation record for build attribution and scope. |
 
 ## Proposed choices awaiting confirmation or prototype evidence
 
@@ -35,7 +36,7 @@ Use this log to preserve both the current choices and the questions that still n
 | P12 | Base layout | Use the full-page voucher as the initial layout for the prototype, resized per D10 | Choose the production base layout; its original 30 rows do not impose a limit or require switching to a separate voucher. |
 | P13 | Voucher date | Explicit date at PDF preparation | Confirm whether finance expects preparation date, submission date, or week-ending date. |
 | P14 | PDF snapshots | Generate on demand and retain each submitted revision | Define re-export naming and how later corrections are linked to earlier submissions. |
-| P15 | PDF pagination | A4 portrait, fit to width at readable size, with multiple pages as needed | Test page breaks, repeated table headings, and keeping totals/signatures together. The single-page blank-template test is not a requirement to compress every voucher onto one page. |
+| P15 | Production PDF pagination | Prototype uses A4 portrait, fit to width, and no frozen-row repetition; user accepted the supplied short/long samples | Any additional continuation-heading requirements and full native boundary/text cases remain separate from acceptance of those samples. |
 
 ## Immediate inputs needed
 

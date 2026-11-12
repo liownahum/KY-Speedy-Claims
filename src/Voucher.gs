@@ -47,6 +47,10 @@ var VoucherRenderer = (function () {
     return sum;
   }
 
+  function titleHeight(sheet, address) {
+    return 8 + Math.ceil(sheet.getRange(address).getFontSize() * 4 / 3 * 1.4);
+  }
+
   function render(spreadsheet, payload, sourceFileId) {
     var plan = VoucherCore.plan(payload);
     if (!sourceFileId || spreadsheet.getId() === sourceFileId) {
@@ -77,12 +81,20 @@ var VoucherRenderer = (function () {
     list.setValues(options.map(function (value) { return [VoucherCore.literal(value)]; }));
     var rowStyle = helper.getRange('C10:I10');
     sheet.getRange('B12:H12').copyTo(rowStyle, { formatOnly: true });
+    rowStyle.clearDataValidations();
     helper.hideSheet();
 
+    // Old dropdowns reference X10:X16 on rows that may be deleted below.
+    sheet.getRange('B11:H40').clearDataValidations();
     if (plan.claimCount < 30) sheet.deleteRows(11 + plan.claimCount, 30 - plan.claimCount);
     if (plan.claimCount > 30) sheet.insertRowsBefore(41, plan.claimCount - 30);
     rowStyle.copyFormatToRange(sheet, 2, 8, 11, plan.lastClaimRow);
-    sheet.getRange(11, 2, plan.claimCount, 7).setValues(plan.rows);
+    var claimRange = sheet.getRange(11, 2, plan.claimCount, 7);
+    claimRange.clearDataValidations();
+    var rule = SpreadsheetApp.newDataValidation().requireValueInRange(list, true).setAllowInvalid(false).build();
+    sheet.getRange(11, 7, plan.claimCount, 1).setDataValidation(rule);
+    SpreadsheetApp.flush();
+    claimRange.setValues(plan.rows);
 
     // C:F is already one visible Description column. Merge within that span only
     // in this working copy so long text can wrap without altering the visible columns.
@@ -95,10 +107,13 @@ var VoucherRenderer = (function () {
     rowHeights.forEach(function (height, index) { sheet.setRowHeight(11 + index, height); });
     sheet.getRange('H6').setValue(plan.dateSerial).setNumberFormat('dd mmm yyyy');
     sheet.getRange(11, 8, plan.claimCount, 1).setNumberFormat('0.00');
-    var rule = SpreadsheetApp.newDataValidation().requireValueInRange(list, true).setAllowInvalid(false).build();
-    sheet.getRange(11, 7, plan.claimCount, 1).setDataValidation(rule);
     sheet.getRange(plan.totalRow, 8).setFormula(plan.totalFormula).setNumberFormat('0.00');
-    sheet.setFrozenRows(10);
+    // Imported merged titles can have explicit row heights smaller than their font.
+    sheet.setRowHeight(2, Math.max(sheet.getRowHeight(2), titleHeight(sheet, 'B2') - sheet.getRowHeight(3)));
+    sheet.setRowHeight(4, Math.max(sheet.getRowHeight(4), titleHeight(sheet, 'B4')));
+    // Repeating the full frozen header with a bounded print range duplicated it
+    // in the user's one-claim PDF. Keep the prototype header in the content only.
+    sheet.setFrozenRows(0);
     SpreadsheetApp.flush();
     var actualTotal = sheet.getRange(plan.totalRow, 8).getValue();
     if (typeof actualTotal !== 'number' || Math.round(actualTotal * 100) !== plan.totalCents) {

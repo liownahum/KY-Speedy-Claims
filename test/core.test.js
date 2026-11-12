@@ -84,7 +84,7 @@ test('print settings address only the resized voucher and fit width, not total p
   assert.equal(query.get('c2'), '8');
   assert.equal(query.get('size'), 'A4');
   assert.equal(query.get('scale'), '2');
-  assert.equal(query.get('fzr'), 'true');
+  assert.equal(query.get('fzr'), 'false');
   assert.throws(() => core.pdfQuery(1, 0));
 });
 

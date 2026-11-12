@@ -2,7 +2,7 @@
 
 KY Speedy Claims helps an event's finance IC collect receipt submissions, organise them in Google Drive, and prepare each claimant's weekly claim document using the finance department's standard template.
 
-**Status:** initial Google Apps Script voucher prototype implemented with local automated checks. Live Google conversion, rendering, and PDF pagination still need authorisation and verification. Form submission processing, guided event setup, and the documentation website are not implemented yet.
+**Status:** the user confirmed successful one-line and long voucher exports in a live Google Apps Script run on 12 November 2026. The voucher prototype is validated for those manual cases; see the linked validation record for build and evidence details. Form submission processing, guided event setup, second-account installation, and the documentation website are not implemented/verified yet.
 
 ## Intended experience
 
@@ -21,14 +21,16 @@ Each event operates independently under its finance IC's Google account. Receipt
 - [Build roadmap](docs/roadmap.md): milestones and evidence needed before moving forward.
 - [Voucher template findings](docs/voucher-template.md): verified fields, dynamic claim rows, and A4 PDF export requirements.
 - [Prototype guide](docs/prototype.md): developer setup, synthetic voucher runs, test coverage, and remaining live checks.
+- [Manual live test](docs/manual-test.md): one-file setup, existing-project updates, and Drive API v2/v3 compatibility.
+- [Live validation record](docs/live-validation.md): confirmed short/long exports, tested build, evidence folder, and remaining scope.
 
-## What comes first
+## Current milestone
 
 The official template has been supplied and inspected. Finance requires a printed payment voucher, so the submission output is a PDF prepared for printing. A blank full-page voucher has been verified as a single A4 PDF using an explicit sheet and print range.
 
 Each weekly voucher must have exactly one input row per included claim. Delete unused input rows and add rows when needed, preserving the official headings, styling, totals, and signature sections. The original template's row counts are starting layouts, not claim limits.
 
-The prototype now contains that copy/fill/resize/export path. Next, authorise a developer test run in Google and visually verify one-claim and larger filled PDFs, then test form copying and receipt uploads under a second Google account before building the full installer.
+The copy/fill/resize/export path has passed the user's short/long live tests. Next is claim intake: connect form submissions to the event register, receipt numbering/routing, and the appropriate person's weekly voucher. Form-upload ownership and independent second-account setup must also be proved before accepting the guided installer.
 
 ## Local development
 
@@ -37,9 +39,12 @@ Use Node.js 20 or later. No dependency installation is needed for the local chec
 ```sh
 npm run check
 npm test
+npm run bundle
 ```
 
 `src/` is the Apps Script project. `test/` exercises the pure voucher planner, rendering adapter, PDF response handling, and copy/conversion runner using in-memory Google service substitutes. These tests do not establish native Google layout fidelity.
+
+The bundle command prepares a single Code.gs, appsscript.json, and quick-start guide under local/live-test. The bundled manifest uses Drive API v2; the importer supports either v2 or v3. Updating GitHub does not replace code already pasted into a Google project.
 
 Do not redesign the official output document. The input Google Form and internal registers are separate from that standardised document.
 

@@ -1,0 +1,20 @@
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const { createHash } = require('node:crypto');
+
+const root = path.resolve(__dirname, '..');
+const destination = path.resolve(process.argv[2] || path.join(root, 'local', 'live-test'));
+const names = ['VoucherCore.js', 'Voucher.gs', 'Prototype.gs'];
+const script = names.map(name => '// Source: src/' + name + '\n' + fs.readFileSync(path.join(root, 'src', name), 'utf8')).join('\n\n');
+const manifest = fs.readFileSync(path.join(root, 'src', 'appsscript.json'), 'utf8');
+JSON.parse(manifest);
+const fingerprint = createHash('sha256').update(script + '\n' + manifest).digest('hex');
+const combined = '/* KY Speedy Claims manual live-test bundle. Source SHA-256: ' + fingerprint + ' */\n\n' + script;
+new vm.Script(combined, { filename: 'Code.gs' });
+fs.mkdirSync(destination, { recursive: true });
+fs.writeFileSync(path.join(destination, 'Code.gs'), combined + '\n');
+fs.writeFileSync(path.join(destination, 'appsscript.json'), manifest);
+fs.copyFileSync(path.join(root, 'docs', 'manual-test.md'), path.join(destination, 'START-HERE.md'));
+console.log('Built Code.gs, appsscript.json, and START-HERE.md. Source fingerprint: ' + fingerprint.slice(0, 12) + '.');
