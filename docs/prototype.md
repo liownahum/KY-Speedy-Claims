@@ -6,7 +6,7 @@ The first implementation creates a separate native Google Sheets working copy of
 
 This is a developer-run prototype, not the final setup experience for finance ICs. It does not create a Google Form, install submission triggers, allocate receipt numbers, manage weekly document identities, approve claims, or send payments/emails. Sample receipt numbers are deliberately nonconsecutive to verify they survive resizing.
 
-Local automated checks pass using Google service substitutes. Live Drive conversion, native Sheets calculations, field wrapping, PDF pagination, and second-account installation have not yet been verified. Every prototype result has `needsPrintReview: true`.
+Local automated checks pass using Google service substitutes. The user's latest Google run passed import and reached the native renderer, where it exposed the dropdown-ordering issue described below. A completed filled-voucher PDF, native calculations, field wrapping, PDF pagination, conversion fidelity, and second-account installation still need verification. Every prototype result has `needsPrintReview: true`.
 
 ## Files
 
@@ -52,7 +52,7 @@ The manifest requests Drive access to read the specified master and create files
 
 ## Row and formatting behaviour
 
-- Preserve congregation options in a hidden helper tab before deleting whole worksheet rows. Reapply validation to the final input range.
+- Preserve congregation options in a hidden helper tab before deleting whole worksheet rows. Remove imported dropdown rules from the source row-style snapshot and original input cells before resizing. After copying styles, clear any surviving rules in the final input range, bind strict congregation validation to the preserved helper, and flush before writing claim values.
 - Retain a clean input-row style before resizing, then apply it to all final input rows.
 - Delete surplus input rows or insert extra rows before the total. Rebuild the total range, retaining the official positive-total/blank behaviour.
 - Keep receipt numbers from the supplied data; never derive them from the new row position.
@@ -70,6 +70,8 @@ Run `npm run check` and `npm test` with Node.js 20+. No npm dependencies are req
 Automated coverage includes 1, 2, 7, 8, 30, 31, and 75 claims; exact claim counts; footer movement; stable receipt IDs; cent totals; preserved congregation helpers; valid dates; literal formula-looking input; invalid/occupied templates; v2/v3 copy/conversion branches; setup checks before resource creation; no cross-version retry after an upload error; unchanged source identity; and refusal to save HTTP failures or non-PDF responses as vouchers.
 
 The in-memory adapter models row shifts across all columns, so tests exercise deletion of the original helper-list location as well as preservation of its separate copy. It is not a full implementation of Sheets formatting or formula recalculation. PDF response tests use synthetic bytes and do not create a rendered document.
+
+The next user-run live test reached rendering but rejected G11 under an old data-validation rule. The original renderer installed its replacement dropdown after writing claims. The fix installs it before writing, with explicit clearing around row/style operations. The test adapter now enforces strict dropdowns: the previous renderer reproduces the G11 rejection after row deletion, while the corrected renderer passes and still rejects unknown congregations. Native PDF layout remains unverified pending rerun.
 
 ## Required native run matrix
 

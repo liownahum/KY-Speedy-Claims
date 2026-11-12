@@ -33,6 +33,8 @@ Send the exact execution error if a run fails. For a successful run, share the P
 
 `TypeError: Drive.Files.create is not a function` in the old bundle means it called the v3 method against a service without that method. Replace Code.gs with the updated bundle; keep v2 if that is available in your project. An absent/incompatible service now produces a clear setup message before creating an output folder.
 
+If an older bundle rejects G11 for violating data validation, replace Code.gs again with the latest bundle. The renderer now restores the Congregation dropdown against its preserved list before writing claims, rather than leaving an old rule active during the write. Keep your existing service and script properties and rerun runVoucherPrototype to create a fresh sample; do not point PROTOTYPE_TEMPLATE_ID at an incomplete sample workbook.
+
 The default source is the supplied XLSX template. Each run creates uniquely named sample resources in a new folder unless PROTOTYPE_OUTPUT_FOLDER_ID names an existing destination. Incomplete copies are retained for diagnosis. This is a developer-run prototype, not the final finance IC setup experience. Full scope and remaining checks are in [the prototype guide](https://github.com/liownahum/KY-Speedy-Claims/blob/main/docs/prototype.md).
 
 Only each finance IC needs a script installation. Claimants will use the eventual Google Form; they do not need script copies. The planned Setup Workbook will copy its script with it, after which the IC authorises their copy and installs its own trigger. Merging repository changes does not update a script already pasted into Google.

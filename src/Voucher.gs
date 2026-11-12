@@ -77,12 +77,20 @@ var VoucherRenderer = (function () {
     list.setValues(options.map(function (value) { return [VoucherCore.literal(value)]; }));
     var rowStyle = helper.getRange('C10:I10');
     sheet.getRange('B12:H12').copyTo(rowStyle, { formatOnly: true });
+    rowStyle.clearDataValidations();
     helper.hideSheet();
 
+    // Old dropdowns reference X10:X16 on rows that may be deleted below.
+    sheet.getRange('B11:H40').clearDataValidations();
     if (plan.claimCount < 30) sheet.deleteRows(11 + plan.claimCount, 30 - plan.claimCount);
     if (plan.claimCount > 30) sheet.insertRowsBefore(41, plan.claimCount - 30);
     rowStyle.copyFormatToRange(sheet, 2, 8, 11, plan.lastClaimRow);
-    sheet.getRange(11, 2, plan.claimCount, 7).setValues(plan.rows);
+    var claimRange = sheet.getRange(11, 2, plan.claimCount, 7);
+    claimRange.clearDataValidations();
+    var rule = SpreadsheetApp.newDataValidation().requireValueInRange(list, true).setAllowInvalid(false).build();
+    sheet.getRange(11, 7, plan.claimCount, 1).setDataValidation(rule);
+    SpreadsheetApp.flush();
+    claimRange.setValues(plan.rows);
 
     // C:F is already one visible Description column. Merge within that span only
     // in this working copy so long text can wrap without altering the visible columns.
@@ -95,8 +103,6 @@ var VoucherRenderer = (function () {
     rowHeights.forEach(function (height, index) { sheet.setRowHeight(11 + index, height); });
     sheet.getRange('H6').setValue(plan.dateSerial).setNumberFormat('dd mmm yyyy');
     sheet.getRange(11, 8, plan.claimCount, 1).setNumberFormat('0.00');
-    var rule = SpreadsheetApp.newDataValidation().requireValueInRange(list, true).setAllowInvalid(false).build();
-    sheet.getRange(11, 7, plan.claimCount, 1).setDataValidation(rule);
     sheet.getRange(plan.totalRow, 8).setFormula(plan.totalFormula).setNumberFormat('0.00');
     sheet.setFrozenRows(10);
     SpreadsheetApp.flush();

@@ -37,12 +37,30 @@ for (const count of [1, 2, 7, 8, 30, 31, 75]) {
     assert.equal(sheet.validations[0].rows, count);
     assert.equal(sheet.validations[0].rule.range.sheet, config);
     assert.equal(sheet.validations[0].rule.allowInvalid, false);
+    const binding = workbook.mutations.findIndex(operation => operation[0] === 'validation' && operation[1] === sheet.name);
+    const claimWrite = workbook.mutations.findIndex(operation => operation[0] === 'write' && operation[1] === sheet.name && operation[2] === 11);
+    assert.ok(binding < claimWrite, 'Dropdown must reference the preserved list before claims are written');
+    assert.equal(sheet.getRange(`G${10 + count}`).getDataValidation().range.sheet, config);
     assert.equal(sheet.frozenRows, 10);
     const expectedOperation = count < 30 ? ['deleteRows', 11 + count, 30 - count] : count > 30 ? ['insertRows', 41, count - 30] : null;
     const resizing = workbook.mutations.filter(operation => /Rows$/.test(operation[0]));
     assert.deepEqual(resizing, expectedOperation ? [expectedOperation] : []);
   });
 }
+
+test('fixture reproduces the stale-dropdown rejection after original helper rows are deleted', () => {
+  const { sheet } = fixture();
+  sheet.deleteRows(12, 29);
+  assert.throws(() => sheet.getRange('G11').setValue('Youth'), /Data validation rejected/);
+});
+
+test('restored congregation dropdown rejects unknown values after rendering', () => {
+  const { workbook, sheet } = fixture();
+  runtime().renderer.render(workbook, core.sample(1), 'original-master');
+  assert.throws(() => sheet.getRange('G11').setValue('Unknown'), /Data validation rejected/);
+  sheet.getRange('G11').setValue('English');
+  assert.equal(sheet.getRange('G11').getValue(), 'English');
+});
 
 test('refuses the original file before modifying it', () => {
   const { workbook } = fixture();

@@ -16,6 +16,8 @@ Implementation started after PR #1 was merged on 12 November 2026. The [develope
 
 The first user-run live test found a Drive API mismatch: the project exposed v2, but the initial importer called the v3 create method. The compatibility fix supports both versions, checks setup before creating folders, and refreshes the one-file bundle. Conversion and filled-PDF verification await the user's rerun.
 
+The subsequent user-run test reached the renderer and failed at G11 due to an imported dropdown rule. The fix clears stale rules around resizing/style copying and installs strict validation against the preserved helper before writing any claims. The enhanced test adapter reproduces the original failure and verifies the fix; final Google rendering/PDF review still awaits a successful rerun.
+
 ### Official template check
 
 - Obtain the blank original and identify the header cells, claim-entry range, formulas, signatures, and print area.
