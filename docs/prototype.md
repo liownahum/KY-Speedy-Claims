@@ -6,7 +6,7 @@ The first implementation creates a separate native Google Sheets working copy of
 
 This is a developer-run prototype, not the final setup experience for finance ICs. It does not create a Google Form, install submission triggers, allocate receipt numbers, manage weekly document identities, approve claims, or send payments/emails. Sample receipt numbers are deliberately nonconsecutive to verify they survive resizing.
 
-Local automated checks pass using Google service substitutes. The user's latest Google run created a one-claim PDF with total 12.50; visual review found a duplicated header and clipped voucher title. The next correction disables frozen-header repetition and ensures adequate title-row height. Corrected PDF layout, larger vouchers, conversion fidelity, and second-account installation still need verification. Every prototype result has `needsPrintReview: true`.
+The user confirmed successful one-line and long exports in live Google Apps Script on 12 November 2026 after the import, dropdown, and PDF-header fixes. See the [live validation record](live-validation.md) for the supplied build, evidence folder, attribution, and exact scope. The long run's claim count was not specified. Second-account installation and the full native case matrix remain outstanding. Every newly generated prototype result retains `needsPrintReview: true` for its own print review.
 
 ## Files
 
@@ -36,7 +36,7 @@ For one-file setup, run `npm run bundle` to generate Code.gs, appsscript.json, a
 
 The initial live run reported only v2 in the service dropdown and failed at `Drive.Files.create`. That was a version mismatch: v3 exposes create, while v2 exposes insert and uses different title/parent metadata. The importer now detects the installed method before creating an output folder, uses v2 insert with `convert: true` when appropriate, and retains support for v3 create. It does not retry an upload failure through another version, which could duplicate files. Native Sheets sources continue to use DriveApp.makeCopy without requiring the Advanced Drive importer.
 
-Keep v2 if that is what the project offers; replacing the pasted Code.gs is sufficient for an existing v2 project. A missing/incompatible service fails with a setup message before output resources are created. The corrected import still needs a successful native Google run.
+Keep v2 if that is what the project offers; replacing the pasted Code.gs is sufficient for an existing v2 project. A missing/incompatible service fails with a setup message before output resources are created. The subsequent user-run short/long exports succeeded in the reported setup; the v3 branch and other IC accounts retain separate verification requirements.
 
 ### Script properties
 
@@ -72,11 +72,11 @@ Automated coverage includes 1, 2, 7, 8, 30, 31, and 75 claims; exact claim count
 
 The in-memory adapter models row shifts across all columns, so tests exercise deletion of the original helper-list location as well as preservation of its separate copy. It is not a full implementation of Sheets formatting or formula recalculation. PDF response tests use synthetic bytes and do not create a rendered document.
 
-The next user-run live test reached rendering but rejected G11 under an old data-validation rule. The original renderer installed its replacement dropdown after writing claims. The fix installs it before writing, with explicit clearing around row/style operations. The test adapter now enforces strict dropdowns: the previous renderer reproduces the G11 rejection after row deletion, while the corrected renderer passes and still rejects unknown congregations. Native PDF layout remains unverified pending rerun.
+An earlier user-run live test reached rendering but rejected G11 under an old data-validation rule. The original renderer installed its replacement dropdown after writing claims. The fix installs it before writing, with explicit clearing around row/style operations. The test adapter now enforces strict dropdowns: the previous renderer reproduces the G11 rejection after row deletion, while the corrected renderer passes and still rejects unknown congregations. The later user confirmation accepts the supplied short/long export samples; it does not imply that every native case below was individually tested.
 
 ## Required native run matrix
 
-Run fresh samples with 1, 2, 7, 8, 30, 31, and 75 claims. For each run, verify:
+For a fully documented regression matrix, run fresh samples with 1, 2, 7, 8, 30, 31, and 75 claims. The one-line and an unspecified long export are already user-confirmed; the other exact counts are not inferred from that confirmation. For each run, verify:
 
 1. Source template unchanged; work created in a different file.
 2. Exactly N claim rows, with all receipt numbers and values retained.

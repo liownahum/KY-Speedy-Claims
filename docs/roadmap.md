@@ -10,15 +10,11 @@ Deliverables: README, [requirements](requirements.md), [decision log](decisions.
 
 This is the first implementation milestone. Use synthetic claim data and two Google accounts representing different finance ICs.
 
-Progress on 12 November 2026: source template inspected, original field ranges and row counts documented, and a blank full voucher exported and visually checked as one A4 page. User confirmed printed submission via PDF, Group = Congregation, and exactly one input row per claim by adding/deleting input rows. See [template findings](voucher-template.md). Filling/resizing a disposable copy, conversion testing, and second-account setup are still outstanding.
+Status on 12 November 2026: the user confirmed that the latest prototype works for both a one-line and a long export in live Google Apps Script. The copy/fill/resize/export path is validated for those manual samples. See the [live validation record](live-validation.md) for the supplied build, evidence folder, attribution, and remaining cases.
 
-Implementation started after PR #1 was merged on 12 November 2026. The [developer prototype](prototype.md) contains copy/conversion, input validation, helper-preserving row resizing, totals, formatting, and scoped PDF export. Local service-model checks pass; live Google authorisation, conversion, rendering, and print-review evidence remain outstanding. Milestone 1 is not yet complete.
+Live testing exposed and resolved the Drive API version mismatch, stale dropdown validation, and repeated/clipped PDF headers. The [developer prototype](prototype.md) also has 46 passing local checks. Exact counts for the long native test were not supplied; the complete boundary matrix, unusual text cases, and second-account setup are not implied by the confirmation.
 
-The first user-run live test found a Drive API mismatch: the project exposed v2, but the initial importer called the v3 create method. The compatibility fix supports both versions, checks setup before creating folders, and refreshes the one-file bundle. Conversion and filled-PDF verification await the user's rerun.
-
-The subsequent user-run test reached the renderer and failed at G11 due to an imported dropdown rule. The fix clears stale rules around resizing/style copying and installs strict validation against the preserved helper before writing any claims. The enhanced test adapter reproduces the original failure and verifies the fix; final Google rendering/PDF review still awaits a successful rerun.
-
-The next user-run test created a one-claim PDF, but its image showed a duplicated header and clipped title. The corrective change disables frozen-header repetition and sizes title areas for their imported font. Corrected native PDF layout remains to be verified. Repeated continuation headings are deferred pending a reliable print design.
+The voucher-rendering part is accepted for the reported short/long cases. Milestone 1 remains open for Google Form/receipt-upload feasibility and an independent second-account installation.
 
 ### Official template check
 
