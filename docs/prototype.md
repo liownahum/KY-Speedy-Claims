@@ -6,7 +6,7 @@ The first implementation creates a separate native Google Sheets working copy of
 
 This is a developer-run prototype, not the final setup experience for finance ICs. It does not create a Google Form, install submission triggers, allocate receipt numbers, manage weekly document identities, approve claims, or send payments/emails. Sample receipt numbers are deliberately nonconsecutive to verify they survive resizing.
 
-Local automated checks pass using Google service substitutes. The user's latest Google run passed import and reached the native renderer, where it exposed the dropdown-ordering issue described below. A completed filled-voucher PDF, native calculations, field wrapping, PDF pagination, conversion fidelity, and second-account installation still need verification. Every prototype result has `needsPrintReview: true`.
+Local automated checks pass using Google service substitutes. The user's latest Google run created a one-claim PDF with total 12.50; visual review found a duplicated header and clipped voucher title. The next correction disables frozen-header repetition and ensures adequate title-row height. Corrected PDF layout, larger vouchers, conversion fidelity, and second-account installation still need verification. Every prototype result has `needsPrintReview: true`.
 
 ## Files
 
@@ -59,7 +59,8 @@ The manifest requests Drive access to read the specified master and create files
 - In the working copy only, merge C:F within each existing visible Description column so text can wrap across its intended width. Merge the blank name/payment input spans for the same reason. Headings, visible column divisions, and source master remain unchanged.
 - Apply conservative row heights without truncating strings. Oversized text that cannot fit the prototype's row-height bound is rejected for review rather than silently clipped.
 - Keep approval and verification input areas blank. Prototype execution is not an approval.
-- Freeze the first ten rows to repeat the voucher heading/table header in the PDF; request A4 portrait with fit-to-width, excluding other tabs and column-X helpers. Actual page breaks, repeated-heading behaviour, and keeping totals/signatures together need native visual verification.
+- Ensure the two title areas have enough height for the imported font. The source's single-row PAYMENT VOUCHER title uses a 24-point font in a 12.75-point row, which can clip after conversion/export.
+- Clear frozen rows in the working copy and disable frozen-row repetition in the PDF request. The initial combination of ten frozen header rows and a bounded PDF range is the likely source of the duplicated header seen in the one-claim PDF. Request A4 portrait with fit-to-width, excluding other tabs and column-X helpers. Repeated headings for continuation pages are intentionally disabled pending a separately verified pagination design; page breaks and totals/signature placement still need native review.
 
 Each render starts from a fresh copy. Updating an already-rendered weekly document and recovering an interrupted live submission are future processor work. Re-running the synthetic prototype creates a new sample, not an in-place update.
 
@@ -84,7 +85,7 @@ Run fresh samples with 1, 2, 7, 8, 30, 31, and 75 claims. For each run, verify:
 5. Name, payment placeholder, description, and decimal amounts are legible without clipping.
 6. Total, Prepared by, Payment approved by, and Verified by appear below the final claim row.
 7. PDF includes only the payment voucher on A4 pages, at readable size, with no truncated claims or helper cells.
-8. Long vouchers have usable repeated headings and a usable totals/signature block. Record any awkward page break before accepting the exporter for live claims.
+8. The first page has exactly one header, and both title lines are fully visible. For longer vouchers, inspect continuation-page context and totals/signature placement. Repeated frozen headings are disabled; continuation-page headings need a separately verified design before production acceptance.
 
 After the basic matrix, test long names/descriptions and repeat under another IC account. Store test evidence privately in Drive or a local ignored directory; do not commit live financial records.
 

@@ -2,7 +2,7 @@
 
 KY Speedy Claims helps an event's finance IC collect receipt submissions, organise them in Google Drive, and prepare each claimant's weekly claim document using the finance department's standard template.
 
-**Status:** initial Google Apps Script voucher prototype implemented with local automated checks. The user-run Google test now reaches the native renderer; a completed filled voucher, PDF pagination, conversion fidelity, and second-account setup still need verification. Form submission processing, guided event setup, and the documentation website are not implemented yet.
+**Status:** initial Google Apps Script voucher prototype implemented with local automated checks. The user-run Google test now generates a filled PDF; duplicated/clipped header defects are being corrected. Corrected print layout, larger vouchers, conversion fidelity, and second-account setup still need verification. Form submission processing, guided event setup, and the documentation website are not implemented yet.
 
 ## Intended experience
 

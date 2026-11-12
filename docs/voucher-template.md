@@ -77,6 +77,12 @@ The tested public-source export used sheet gid `314912145`, range `B2:H45`, port
 
 These are observed export results, not a guarantee of filled-document fidelity. The test was a blank original. Do not represent it as a completed claim or production-ready export.
 
+### First live filled-PDF review
+
+The user supplied an image of a generated one-claim PDF with the sample data and a 12.50 total. It repeated the header block and clipped PAYMENT VOUCHER in both copies. The prototype froze rows 1:10 and exported with frozen-row repetition enabled, making that interaction the likely duplication cause. The source XML also confirms that B4's 24-point title font sits in a 12.75-point row, consistent with the clipping.
+
+The corrective prototype clears frozen rows, disables repetition in the PDF request, and ensures minimum height for the two title areas based on their font size. It preserves the original title text and does not shrink already taller title rows. The original master is unchanged. The next native export must confirm a single header and complete title text. Continuation-page headings are deferred until a reliable pagination approach is verified; the previous local service models could not detect visual duplication or clipping.
+
 ## Proposed output behaviour
 
 1. Keep the editable document for the claimant and week.

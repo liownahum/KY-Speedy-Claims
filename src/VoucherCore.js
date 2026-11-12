@@ -118,7 +118,7 @@ var VoucherCore = (function () {
     var settings = {
       format: 'pdf', gid: sheetId, size: 'A4', portrait: true,
       scale: 2, // Fit width; do not force an arbitrarily long voucher onto one page.
-      sheetnames: false, printtitle: false, gridlines: false, fzr: true,
+      sheetnames: false, printtitle: false, gridlines: false, fzr: false,
       pagenum: 'UNDEFINED', attachment: true,
       top_margin: 0.25, bottom_margin: 0.25, left_margin: 0.25, right_margin: 0.25,
       r1: 1, c1: 1, r2: lastPrintRow, c2: 8

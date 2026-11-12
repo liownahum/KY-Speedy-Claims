@@ -16,7 +16,7 @@ class Range {
   getValue() { return this.getValues()[0][0]; }
   getDisplayValue() { return String(this.getValue()); }
   getFormula() { return this.getFormulas()[0][0]; }
-  getFontSize() { return 12; }
+  getFontSize() { return this.sheet.fontSizes.get(`${this.row},${this.col}`) || 12; }
   getMergedRanges() {
     return this.sheet.merges.filter(other => this.row <= other.row + other.rows - 1 && other.row <= this.row + this.rows - 1 && this.col <= other.col + other.cols - 1 && other.col <= this.col + this.cols - 1);
   }
@@ -81,7 +81,7 @@ class Range {
 
 class Sheet {
   constructor(workbook, name) {
-    Object.assign(this, { workbook, name, cells: new Map(), merges: [], validations: [], validationRules: new Map(), rowHeights: new Map(), hidden: false, frozenRows: 0 });
+    Object.assign(this, { workbook, name, cells: new Map(), merges: [], validations: [], validationRules: new Map(), rowHeights: new Map(), fontSizes: new Map(), hidden: false, frozenRows: 0 });
   }
   getRange(row, col, rows, cols) {
     if (typeof row === 'string') {
@@ -155,7 +155,7 @@ function fixture() {
   const workbook = new Workbook();
   const sheet = workbook.insertSheet('Payment Voucher (full)');
   const labels = {
-    B4: 'PAYMENT VOUCHER', G6: 'Date : ', B8: 'Pay to  :', F8: 'Bank A/c/PayNow:',
+    B2: 'KUM YAN METHODIST CHURCH', B4: 'PAYMENT VOUCHER', G6: 'Date : ', B8: 'Pay to  :', F8: 'Bank A/c/PayNow:',
     B10: 'R No.', C10: 'Description', G10: 'Congregation', H10: 'Amount',
     G41: 'Total:', B43: 'Prepared by  :', F43: 'Payment approved by  :', B45: 'Verified by  :'
   };
@@ -164,6 +164,12 @@ function fixture() {
   const options = ['Cantonese', 'Children', 'English', 'General', 'Mandarin', 'Woodlands', 'Youth'];
   sheet.getRange('X10:X16').setValues(options.map(option => [option]));
   sheet.getRange('B12').setValue(' ');
+  // Source XML: B2/B4 use 24-point font; rows 2/3/4 are 29.25/6.75/12.75 points.
+  sheet.fontSizes.set('2,2', 24);
+  sheet.fontSizes.set('4,2', 24);
+  sheet.setRowHeight(2, 39);
+  sheet.setRowHeight(3, 9);
+  sheet.setRowHeight(4, 17);
   sheet.getRange('G11:G40').setDataValidation({ range: sheet.getRange('X10:X16'), allowInvalid: false });
   sheet.validations = [];
   workbook.mutations = [];

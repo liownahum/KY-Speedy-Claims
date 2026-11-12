@@ -18,6 +18,8 @@ The first user-run live test found a Drive API mismatch: the project exposed v2,
 
 The subsequent user-run test reached the renderer and failed at G11 due to an imported dropdown rule. The fix clears stale rules around resizing/style copying and installs strict validation against the preserved helper before writing any claims. The enhanced test adapter reproduces the original failure and verifies the fix; final Google rendering/PDF review still awaits a successful rerun.
 
+The next user-run test created a one-claim PDF, but its image showed a duplicated header and clipped title. The corrective change disables frozen-header repetition and sizes title areas for their imported font. Corrected native PDF layout remains to be verified. Repeated continuation headings are deferred pending a reliable print design.
+
 ### Official template check
 
 - Obtain the blank original and identify the header cells, claim-entry range, formulas, signatures, and print area.

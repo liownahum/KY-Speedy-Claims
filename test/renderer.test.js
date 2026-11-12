@@ -41,7 +41,7 @@ for (const count of [1, 2, 7, 8, 30, 31, 75]) {
     const claimWrite = workbook.mutations.findIndex(operation => operation[0] === 'write' && operation[1] === sheet.name && operation[2] === 11);
     assert.ok(binding < claimWrite, 'Dropdown must reference the preserved list before claims are written');
     assert.equal(sheet.getRange(`G${10 + count}`).getDataValidation().range.sheet, config);
-    assert.equal(sheet.frozenRows, 10);
+    assert.equal(sheet.frozenRows, 0);
     const expectedOperation = count < 30 ? ['deleteRows', 11 + count, 30 - count] : count > 30 ? ['insertRows', 41, count - 30] : null;
     const resizing = workbook.mutations.filter(operation => /Rows$/.test(operation[0]));
     assert.deepEqual(resizing, expectedOperation ? [expectedOperation] : []);
@@ -60,6 +60,28 @@ test('restored congregation dropdown rejects unknown values after rendering', ()
   assert.throws(() => sheet.getRange('G11').setValue('Unknown'), /Data validation rejected/);
   sheet.getRange('G11').setValue('English');
   assert.equal(sheet.getRange('G11').getValue(), 'English');
+});
+
+test('imported 24-point voucher titles receive enough row height without changing their text', () => {
+  const { workbook, sheet } = fixture();
+  const title = sheet.getRange('B4').getValue();
+  const church = sheet.getRange('B2').getValue();
+  const needed = 8 + Math.ceil(24 * 4 / 3 * 1.4);
+  assert.ok(sheet.getRowHeight(4) < needed, 'Fixture must reproduce the undersized imported title row');
+  runtime().renderer.render(workbook, core.sample(1), 'original-master');
+  assert.ok(sheet.getRowHeight(4) >= needed);
+  assert.ok(sheet.getRowHeight(2) + sheet.getRowHeight(3) >= needed);
+  assert.equal(sheet.getRange('B4').getValue(), title);
+  assert.equal(sheet.getRange('B2').getValue(), church);
+});
+
+test('existing taller title rows are not shrunk', () => {
+  const { workbook, sheet } = fixture();
+  sheet.setRowHeight(2, 100);
+  sheet.setRowHeight(4, 100);
+  runtime().renderer.render(workbook, core.sample(31), 'original-master');
+  assert.equal(sheet.getRowHeight(2), 100);
+  assert.equal(sheet.getRowHeight(4), 100);
 });
 
 test('refuses the original file before modifying it', () => {
@@ -140,6 +162,7 @@ test('PDF export uses the actual copy ID and final print bounds, with the token 
   assert.equal(url.pathname, '/spreadsheets/d/disposable-copy/export');
   assert.equal(url.searchParams.get('r2'), '46');
   assert.equal(url.searchParams.get('scale'), '2');
+  assert.equal(url.searchParams.get('fzr'), 'false');
   assert.equal(url.href.includes('synthetic-test-token'), false);
   assert.equal(calls[0].options.headers.Authorization, 'Bearer synthetic-test-token');
 });
