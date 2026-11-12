@@ -23,8 +23,11 @@ function environment() {
     getId: () => 'form-id', getEditUrl: () => 'edit-url', getPublishedUrl: () => 'submit-url',
     addTextItem: () => newItem('TEXT'), addListItem: () => newItem('LIST'),
     getItems: () => items.map(generic), getItemById: id => generic(items.find(item => item.id === id)),
-    getDestinationId: () => destination,
-    setDestination(type, id) { destination = id; return this; },
+    getDestinationId() {
+      if (!destination) throw new Error('The form currently has no response destination.');
+      return destination;
+    },
+    setDestination(type, id) { calls.push(['destination', type, id]); destination = id; return this; },
     supportsAdvancedResponderPermissions: () => true,
     setPublished(value) { this.published = value; return this; },
     setAcceptingResponses(value) { this.accepting = value; return this; },
@@ -61,6 +64,8 @@ test('setup creates one scaffold and reuses saved resources/questions on rerun',
   const first = env.context.setupClaimPipeline();
   assert.equal(first.stage, 'ADD_RECEIPT_UPLOAD_THEN_ACTIVATE');
   assert.equal(env.items.length, 6);
+  assert.equal(env.form.getDestinationId(), 'register-id');
+  assert.equal(env.calls.filter(call => call[0] === 'destination').length, 1);
   assert.equal(env.form.published, false);
   env.context.setupClaimPipeline();
   for (const effect of ['folder', 'template', 'register', 'form']) assert.equal(env.calls.filter(call => call[0] === effect).length, 1);
@@ -70,6 +75,34 @@ test('setup creates one scaffold and reuses saved resources/questions on rerun',
   assert.equal(cfg.questions.congregation > 0, true);
   assert.equal(env.calls.some(call => call[0] === 'setAllowResponseEdits' && call[1] === false), true);
   assert.equal(env.calls.some(call => call[0] === 'setLimitOneResponsePerUser' && call[1] === false), true);
+});
+
+test('setup resumes an interrupted destination link without creating another form or register', () => {
+  const env = environment(); const set = env.form.setDestination; let fail = true;
+  env.form.setDestination = function (type, id) {
+    set.call(this, type, id);
+    if (fail) { fail = false; throw new Error('Link acknowledgement lost'); }
+    return this;
+  };
+  assert.throws(() => env.context.setupClaimPipeline(), /acknowledgement lost/);
+  env.context.setupClaimPipeline();
+  for (const effect of ['folder', 'template', 'register', 'form', 'destination']) assert.equal(env.calls.filter(call => call[0] === effect).length, 1);
+  assert.equal(env.form.getDestinationId(), 'register-id');
+});
+
+test('setup preserves a different existing destination and stops for review', () => {
+  const env = environment();
+  env.form.setDestination('SPREADSHEET', 'another-register');
+  assert.throws(() => env.context.setupClaimPipeline(), /destination was changed/);
+  assert.equal(env.form.getDestinationId(), 'another-register');
+  assert.equal(env.calls.filter(call => call[0] === 'destination').length, 1);
+});
+
+test('setup does not treat unrelated destination access failures as an unlinked form', () => {
+  const env = environment();
+  env.form.getDestinationId = () => { throw new Error('Permission denied'); };
+  assert.throws(() => env.context.setupClaimPipeline(), /Permission denied/);
+  assert.equal(env.calls.filter(call => call[0] === 'destination').length, 0);
 });
 
 test('activation requires exactly one manually added file-upload question', () => {

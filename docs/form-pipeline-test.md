@@ -73,6 +73,7 @@ The weekly workbook ID stays the same. Processing renders a fresh voucher tab fr
 
 ## If a submission fails
 
+- An earlier setup bundle stopped with **The form currently has no response destination.** while reading a new form's destination. Replace `Code.gs` with the corrected bundle and rerun **setupClaimPipeline** in the same project. It reuses saved resources and links the register; keep Script Properties and existing resources intact. This fix does not change the manifest.
 - Check the **Claims** status and **Last error**, plus Apps Script **Executions**. The raw **Form Responses** tab is separate from processed Claims.
 - Run **retryPendingClaimSubmissions** after fixing a service/access problem. It retries up to ten non-completed responses per run, retaining reserved receipt numbers and stored file IDs.
 - Invalid date/amount, missing email, or an incorrect file count can fail before a Claims row is reserved. The raw response remains in Forms; retry output shows the error. Use a new valid submission for this test. There is no general correction interface yet.

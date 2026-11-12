@@ -93,8 +93,15 @@ function setupClaimPipeline() {
     });
     form.getItemById(config.questions.purchaseDate).asTextItem().setHelpText('Use YYYY-MM-DD, for example 2026-11-12. Purchase date is stored separately; grouping uses submission week.');
     form.getItemById(config.questions.amount).asTextItem().setHelpText('A positive amount such as 12.50. Use one event currency; no currency conversion.');
-    if (form.getDestinationId() && form.getDestinationId() !== config.registerId) throw new Error('Form response destination was changed; review before continuing.');
-    if (!form.getDestinationId()) form.setDestination(FormApp.DestinationType.SPREADSHEET, config.registerId);
+    var destinationId = null;
+    try { destinationId = form.getDestinationId(); }
+    catch (error) {
+      // A newly created form throws here rather than returning an empty ID.
+      // Only this known absence is safe to handle as an unlinked form.
+      if (!/^(?:Exception: )?The form currently has no response destination\.?$/.test(String(error.message || error).trim())) throw error;
+    }
+    if (destinationId && destinationId !== config.registerId) throw new Error('Form response destination was changed; review before continuing.');
+    if (!destinationId) form.setDestination(FormApp.DestinationType.SPREADSHEET, config.registerId);
     return claimStatus_(config);
   });
 }
