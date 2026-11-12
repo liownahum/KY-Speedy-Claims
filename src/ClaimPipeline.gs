@@ -14,14 +14,95 @@ function claimConfig_(required) {
 function saveClaimConfig_(config) {
   PropertiesService.getScriptProperties().setProperty('KY_CLAIM_PIPELINE', JSON.stringify(config));
 }
+function claimParentFolderId_(value) {
+  value = String(value || '').trim();
+  if (!value) return null;
+  if (/^[\w-]+$/.test(value)) return value;
+  var match = value.match(/^https:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([\w-]+)\/?(?:\?[^#]*)?(?:#.*)?$/);
+  if (!match) throw new Error('PIPELINE_PARENT_FOLDER_ID must be a Drive folder ID or a https://drive.google.com/drive/folders/... link.');
+  return match[1];
+}
+function claimDestinationFolder_(id) {
+  if (typeof Drive === 'undefined' || !Drive.Files || typeof Drive.Files.get !== 'function') {
+    throw new Error('Enable the Advanced Drive service before choosing an event folder.');
+  }
+  var metadata = Drive.Files.get(id, {
+    fields: 'id,mimeType,driveId,capabilities(canAddChildren)', supportsAllDrives: true
+  });
+  if (metadata.mimeType !== 'application/vnd.google-apps.folder') throw new Error('Choose an event folder, not a file or shortcut.');
+  if (metadata.driveId) throw new Error('Choose a normal Drive folder; receipt-upload forms cannot be stored in a Workspace Shared Drive.');
+  if (!metadata.capabilities || metadata.capabilities.canAddChildren !== true) {
+    throw new Error('You need permission to add files and folders to the selected event folder.');
+  }
+  var folder = DriveApp.getFolderById(id);
+  if (folder.isTrashed()) throw new Error('The selected event folder is in the trash.');
+  return folder;
+}
+function claimRootFolder_(config) {
+  var raw = PropertiesService.getScriptProperties().getProperty('PIPELINE_PARENT_FOLDER_ID');
+  var parentId = claimParentFolderId_(raw);
+  // Resolve and validate a chosen destination before creating or moving anything.
+  var parent = parentId ? claimDestinationFolder_(parentId) : null;
+  if (!config.rootFolderId) {
+    var name = 'KY Claims Test - ' + config.eventCode + ' - ' + config.eventId.slice(0, 8);
+    var created = parent ? parent.createFolder(name) : DriveApp.createFolder(name);
+    config.rootFolderId = created.getId();
+    config.parentFolderId = parent ? parent.getId() : null;
+    saveClaimConfig_(config);
+    return created;
+  }
+  var folder = DriveApp.getFolderById(config.rootFolderId);
+  if (parent) {
+    if (parent.getId() === folder.getId()) throw new Error('Choose the event folder outside the existing claims folder.');
+    var parents = folder.getParents();
+    var alreadyPlaced = false;
+    while (parents.hasNext()) {
+      if (parents.next().getId() === parent.getId()) alreadyPlaced = true;
+    }
+    if (!alreadyPlaced) folder.moveTo(parent);
+    // Save only after a successful move; a retry can detect a lost acknowledgement.
+    if (config.parentFolderId !== parent.getId()) {
+      config.parentFolderId = parent.getId();
+      saveClaimConfig_(config);
+    }
+  }
+  return folder;
+}
+function claimConfigureCongregation_(form, config) {
+  var value = PropertiesService.getScriptProperties().getProperty('PIPELINE_ASK_CONGREGATION');
+  var enabled = String(value || '').trim().toLowerCase() === 'true';
+  if (!enabled && config.congregations.indexOf('Youth') === -1) {
+    throw new Error('The voucher template must allow Youth before disabling the Congregation question.');
+  }
+  var id = config.questions.congregation;
+  var item = id ? form.getItemById(id) : null;
+  var matching = form.getItems().filter(function (candidate) { return candidate.getTitle() === 'Congregation'; });
+  if (matching.length > 1 || (item && matching.length && matching[0].getId() !== item.getId())) {
+    throw new Error('Duplicate form questions need review: Congregation');
+  }
+  item = item || matching[0];
+  if (enabled) {
+    if (!item) item = form.addListItem().setTitle('Congregation');
+    if (item.getType().toString() !== 'LIST') throw new Error('Unexpected question type: Congregation');
+    form.getItemById(item.getId()).asListItem().setChoiceValues(config.congregations).setRequired(true);
+    config.questions.congregation = item.getId();
+  } else {
+    if (item) form.deleteItem(item);
+    delete config.questions.congregation;
+  }
+  saveClaimConfig_(config);
+}
 function claimStatus_(config) {
   var form = FormApp.openById(config.formId);
   var status = {
     stage: config.active ? 'ACTIVE' : 'ADD_RECEIPT_UPLOAD_THEN_ACTIVATE',
     eventCode: config.eventCode,
+    askCongregation: Boolean(config.questions.congregation),
+    defaultCongregation: config.questions.congregation ? null : 'Youth',
     formEditUrl: form.getEditUrl(), formSubmitUrl: form.getPublishedUrl(),
     registerUrl: 'https://docs.google.com/spreadsheets/d/' + config.registerId + '/edit',
     folderUrl: 'https://drive.google.com/drive/folders/' + config.rootFolderId,
+    parentFolderUrl: config.parentFolderId ? 'https://drive.google.com/drive/folders/' + config.parentFolderId : null,
     weekRule: 'Submission week, Monday-Sunday, Asia/Singapore'
   };
   console.log(JSON.stringify(status));
@@ -39,12 +120,11 @@ function setupClaimPipeline() {
       config = { version: 1, eventId: Utilities.getUuid(), eventCode: code, eventTitle: title, timezone: 'Asia/Singapore', questions: {}, active: false };
       saveClaimConfig_(config);
     }
-    if (config.active) return claimStatus_(config);
-    if (!config.rootFolderId) {
-      config.rootFolderId = DriveApp.createFolder('KY Claims Test - ' + code + ' - ' + config.eventId.slice(0, 8)).getId();
-      saveClaimConfig_(config);
+    var folder = claimRootFolder_(config);
+    if (config.active) {
+      claimConfigureCongregation_(FormApp.openById(config.formId), config);
+      return claimStatus_(config);
     }
-    var folder = DriveApp.getFolderById(config.rootFolderId);
     if (!config.nativeTemplateId) {
       var sourceId = properties.getProperty('PIPELINE_TEMPLATE_ID') || properties.getProperty('PROTOTYPE_TEMPLATE_ID') || '1bV03-iPhOFeUaSI3ep75NaaCaXNzfeFH';
       var source = DriveApp.getFileById(sourceId);
@@ -76,23 +156,23 @@ function setupClaimPipeline() {
     if (form.supportsAdvancedResponderPermissions()) form.setPublished(false);
     else form.setAcceptingResponses(false);
     var fields = [
-      ['fullName', 'Full name (as per NRIC)', 'TEXT'], ['paymentDetails', 'Bank A/c/PayNow', 'TEXT'],
-      ['purchaseDate', 'Purchase date (YYYY-MM-DD)', 'TEXT'], ['description', 'Item description', 'TEXT'],
-      ['amount', 'Amount (up to 2 decimal places)', 'TEXT'], ['congregation', 'Congregation', 'LIST']
+      ['fullName', 'Full name (as per NRIC)'], ['paymentDetails', 'Bank A/c/PayNow'],
+      ['purchaseDate', 'Purchase date (YYYY-MM-DD)'], ['description', 'Item description'],
+      ['amount', 'Amount (up to 2 decimal places)']
     ];
     fields.forEach(function (field) {
       var item = config.questions[field[0]] ? form.getItemById(config.questions[field[0]]) : null;
       if (!item) {
         var existing = form.getItems().filter(function (candidate) { return candidate.getTitle() === field[1]; });
         if (existing.length > 1) throw new Error('Duplicate form questions need review: ' + field[1]);
-        item = existing[0] || (field[2] === 'LIST' ? form.addListItem() : form.addTextItem()).setTitle(field[1]);
+        item = existing[0] || form.addTextItem().setTitle(field[1]);
       }
       item = form.getItemById(item.getId());
-      if (item.getType().toString() !== field[2]) throw new Error('Unexpected question type: ' + field[1]);
-      if (field[2] === 'LIST') item.asListItem().setChoiceValues(config.congregations).setRequired(true);
-      else item.asTextItem().setRequired(true);
+      if (item.getType().toString() !== 'TEXT') throw new Error('Unexpected question type: ' + field[1]);
+      item.asTextItem().setRequired(true);
       config.questions[field[0]] = item.getId(); saveClaimConfig_(config);
     });
+    claimConfigureCongregation_(form, config);
     form.getItemById(config.questions.purchaseDate).asTextItem().setHelpText('Use YYYY-MM-DD, for example 2026-11-12. Purchase date is stored separately; grouping uses submission week.');
     form.getItemById(config.questions.amount).asTextItem().setHelpText('A positive amount such as 12.50. Use one event currency; no currency conversion.');
     var destinationId = null;
@@ -114,6 +194,7 @@ function activateClaimPipeline() {
     var uploads = form.getItems().filter(function (item) { return item.getType().toString() === 'FILE_UPLOAD'; });
     if (uploads.length !== 1) throw new Error('Add exactly one required File upload question in the form editor: Receipt; allow one image or PDF, then rerun activation.');
     config.uploadQuestionId = uploads[0].getId();
+    claimConfigureCongregation_(form, config);
     Object.keys(config.questions).forEach(function (key) {
       if (!form.getItemById(config.questions[key])) throw new Error('A required form question was deleted; restore it before activation.');
     });
@@ -137,7 +218,8 @@ function claimInput_(response, config) {
     localSubmittedDate: Utilities.formatDate(timestamp, config.timezone, 'yyyy-MM-dd'),
     fullName: answers[config.questions.fullName], paymentDetails: answers[config.questions.paymentDetails],
     purchaseDate: answers[config.questions.purchaseDate], description: answers[config.questions.description],
-    congregation: answers[config.questions.congregation], amount: answers[config.questions.amount], fileIds: answers[config.uploadQuestionId]
+    congregation: config.questions.congregation ? answers[config.questions.congregation] : 'Youth',
+    amount: answers[config.questions.amount], fileIds: answers[config.uploadQuestionId]
   };
 }
 function processClaimResponse_(response, config) {
@@ -194,19 +276,68 @@ function claimRetryResponse_(response) {
 }
 
 function showClaimPipelineStatus() { return claimStatus_(claimConfig_(true)); }
-function exportLatestClaimVoucher() {
-  return claimLock_(function () {
-    var config = claimConfig_(true);
-    var store = claimStore_(SpreadsheetApp.openById(config.registerId));
-    var record = store.records().filter(function (item) { return item.status === 'DONE'; }).sort(function (a, b) { return b.receiptNumber - a.receiptNumber; })[0];
-    if (!record) throw new Error('There are no completed claims to export.');
-    var week = store.getMeta('Weeks', ClaimCore.weekKey(record));
-    var person = store.getMeta('People', record.personKey);
-    if (!week || !week.rendered || !person) throw new Error('Weekly voucher metadata is incomplete.');
-    var book = SpreadsheetApp.openById(week.fileId);
-    var filename = 'Voucher - ' + config.eventCode + ' - ' + record.week + ' - r' + week.revision + ' - ' + Utilities.getUuid().slice(0, 8) + '.pdf';
-    var pdf = VoucherRenderer.exportPdf(book, week.rendered, DriveApp.getFolderById(person.folderId), filename);
-    var output = { pdfUrl: pdf.getUrl(), workbookUrl: book.getUrl(), claimCount: week.rendered.claimCount, totalCents: week.rendered.totalCents, needsPrintReview: true };
-    console.log(JSON.stringify(output)); return output;
+function exportWeeklyClaimVouchers() {
+  var config = claimConfig_(true);
+  var today = Utilities.formatDate(new Date(), config.timezone, 'yyyy-MM-dd');
+  var weekStart = ClaimCore.monday(today);
+  var people = claimLock_(function () {
+    var records = claimStore_(SpreadsheetApp.openById(config.registerId)).records();
+    return Array.from(new Set(records.filter(function (record) {
+      return record.week === weekStart;
+    }).map(function (record) { return record.personKey; })));
   });
+  var results = people.map(function (personKey) {
+    var result;
+    try {
+      // Release the lock between people so submissions can continue during a batch.
+      result = claimLock_(function () {
+        var store = claimStore_(SpreadsheetApp.openById(config.registerId));
+        return claimExportPersonWeek_(config, store, personKey, weekStart);
+      });
+    } catch (error) {
+      result = { personKey: personKey, week: weekStart, status: 'ERROR', error: String(error.message || error) };
+    }
+    console.log(JSON.stringify(result));
+    return result;
+  });
+  var summary = {
+    week: weekStart, peopleWithClaims: people.length,
+    exported: results.filter(function (result) { return result.status === 'EXPORTED'; }).length,
+    skipped: results.filter(function (result) { return result.status === 'SKIPPED'; }).length,
+    failed: results.filter(function (result) { return result.status === 'ERROR'; }).length,
+    results: results
+  };
+  console.log(JSON.stringify(summary));
+  return summary;
+}
+
+function claimExportPersonWeek_(config, store, personKey, weekStart) {
+  var records = store.records().filter(function (record) {
+    return record.personKey === personKey && record.week === weekStart;
+  });
+  if (!records.length) return { personKey: personKey, week: weekStart, status: 'SKIPPED' };
+  if (records.some(function (record) { return record.status !== 'DONE' || !record.receiptsReady; })) {
+    throw new Error('This person has incomplete claims for the week; resolve them and retry before exporting.');
+  }
+  var record = records[0];
+  var week = store.getMeta('Weeks', ClaimCore.weekKey(record));
+  var person = store.getMeta('People', personKey);
+  if (!week || !week.rendered || !person) throw new Error('Weekly voucher metadata is incomplete.');
+  var payload = ClaimCore.weeklyPayload(records, record, config);
+  if (week.fingerprint !== JSON.stringify(payload)) {
+    throw new Error('Weekly voucher does not match the saved claims; review before exporting.');
+  }
+  var book = SpreadsheetApp.openById(week.fileId);
+  var filename = 'Voucher - ' + config.eventCode + ' - ' + weekStart + ' - r' + week.revision + ' - ' + Utilities.getUuid().slice(0, 8) + '.pdf';
+  var pdf = VoucherRenderer.exportPdf(book, week.rendered, DriveApp.getFolderById(person.folderId), filename);
+  return {
+    personKey: personKey, fullName: record.payload.fullName, week: weekStart, status: 'EXPORTED',
+    pdfUrl: pdf.getUrl(), workbookUrl: book.getUrl(), revision: week.revision,
+    claimCount: week.rendered.claimCount, totalCents: week.rendered.totalCents, needsPrintReview: true
+  };
+}
+
+// Keep the previously documented entry point usable with the corrected batch behaviour.
+function exportLatestClaimVoucher() {
+  return exportWeeklyClaimVouchers();
 }

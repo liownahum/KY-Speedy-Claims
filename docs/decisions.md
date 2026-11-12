@@ -18,6 +18,9 @@ Use this log to preserve both the current choices and the questions that still n
 | D10 | The weekly voucher has exactly one input row per included claim: delete unused input rows and add rows when needed. Move totals/signatures accordingly and update formula/print ranges. | User explicitly clarified that one claim needs one input row and more claims require added rows on 12 November 2026. Original row counts are not limits. |
 | D11 | Accept the supplied voucher prototype's one-line and long PDF export cases as manually validated in Google Apps Script. | User confirmed both work on 12 November 2026 and supplied the test folder. See the live validation record for build attribution and scope. |
 | D12 | Group claims by submission week, Monday–Sunday in Asia/Singapore, rather than purchase date. | User selected submission week for the pipeline test on 12 November 2026. Purchase date is stored separately. |
+| D13 | Control the Congregation question with `PIPELINE_ASK_CONGREGATION`: true shows the question; missing/null/false removes it and assigns Youth automatically. Keep the official voucher's Congregation column. | User requested this Script Property switch on 12 November 2026. |
+| D14 | A weekly PDF export covers every person with claims in the current submission week, saving each person's PDF in their own folder. People without claims that week receive no output. | User clarified batch PDF completion on 12 November 2026 after the previous helper exported only the latest claimant. |
+| D15 | Allow a normal Drive folder, including a shared folder, as the event's parent location through `PIPELINE_PARENT_FOLDER_ID`. Keep claims in a dedicated subfolder alongside the event's planning documents. | User requested a configurable event location and confirmed a normal Drive folder, possibly shared, on 12 November 2026. |
 
 ## Proposed choices awaiting confirmation or prototype evidence
 

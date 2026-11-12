@@ -23,6 +23,12 @@ function environment() {
     getId: () => 'form-id', getEditUrl: () => 'edit-url', getPublishedUrl: () => 'submit-url',
     addTextItem: () => newItem('TEXT'), addListItem: () => newItem('LIST'),
     getItems: () => items.map(generic), getItemById: id => generic(items.find(item => item.id === id)),
+    deleteItem(item) {
+      const index = items.findIndex(candidate => candidate.id === item.getId());
+      if (index < 0) throw new Error('Item does not exist');
+      calls.push(['deleteItem', item.getId()]);
+      items.splice(index, 1);
+    },
     getDestinationId() {
       if (!destination) throw new Error('The form currently has no response destination.');
       return destination;
@@ -59,22 +65,243 @@ function environment() {
   return { context, properties, calls, form, items, triggers, store, addUpload: () => newItem('FILE_UPLOAD') };
 }
 
+function submission(config, id, overrides = {}) {
+  const values = {
+    fullName: 'SAMPLE - DO NOT SUBMIT', paymentDetails: 'SAMPLE ONLY',
+    purchaseDate: '2026-10-01', description: 'Printing', amount: '12.50',
+    congregation: 'English', ...overrides
+  };
+  const entries = Object.entries(config.questions).map(([key, questionId]) => ({
+    getItem: () => ({ getId: () => questionId }), getResponse: () => values[key]
+  }));
+  entries.push({ getItem: () => ({ getId: () => config.uploadQuestionId }), getResponse: () => ['file-' + id] });
+  return {
+    getId: () => id, getRespondentEmail: () => 'sample@example.com',
+    getTimestamp: () => new Date('2026-11-12T04:00:00Z'), getItemResponses: () => entries
+  };
+}
+
+function connectProcessor(env) {
+  const records = new Map();
+  const clone = value => JSON.parse(JSON.stringify(value));
+  env.store.records = () => clone([...records.values()]);
+  env.store.saveRecord = record => records.set(record.id, clone(record));
+  env.context.ClaimProcessor = require('../src/ClaimProcessor.js');
+  let rendered;
+  env.context.claimFilePorts_ = () => ({
+    ensurePerson: () => ({ folderId: 'person-folder' }),
+    ensureWeek: () => ({ fileId: 'weekly-file' }),
+    fileReceipt: record => 'receipt-url-' + record.id,
+    renderWeek(week, payload) { rendered = clone(payload); }
+  });
+  return { records, rendered: () => rendered };
+}
+
 test('setup creates one scaffold and reuses saved resources/questions on rerun', () => {
   const env = environment();
   const first = env.context.setupClaimPipeline();
   assert.equal(first.stage, 'ADD_RECEIPT_UPLOAD_THEN_ACTIVATE');
-  assert.equal(env.items.length, 6);
+  assert.equal(env.items.length, 5);
   assert.equal(env.form.getDestinationId(), 'register-id');
   assert.equal(env.calls.filter(call => call[0] === 'destination').length, 1);
   assert.equal(env.form.published, false);
   env.context.setupClaimPipeline();
   for (const effect of ['folder', 'template', 'register', 'form']) assert.equal(env.calls.filter(call => call[0] === effect).length, 1);
-  assert.equal(env.items.length, 6);
+  assert.equal(env.items.length, 5);
   const cfg = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
   assert.equal(cfg.timezone, 'Asia/Singapore');
-  assert.equal(cfg.questions.congregation > 0, true);
+  assert.equal(cfg.questions.congregation, undefined);
+  assert.equal(first.askCongregation, false);
+  assert.equal(first.defaultCongregation, 'Youth');
   assert.equal(env.calls.some(call => call[0] === 'setAllowResponseEdits' && call[1] === false), true);
   assert.equal(env.calls.some(call => call[0] === 'setLimitOneResponsePerUser' && call[1] === false), true);
+});
+
+test('setup places the claims folder and finance assets inside the selected event location', () => {
+  const env = environment();
+  const root = { getId: () => 'root-id' };
+  const parent = {
+    getId: () => 'event-folder', isTrashed: () => false,
+    createFolder(name) { env.calls.push(['folder', 'event-folder', name]); return root; }
+  };
+  env.context.Drive = { Files: { get: () => ({
+    mimeType: 'application/vnd.google-apps.folder', capabilities: { canAddChildren: true }
+  }) } };
+  env.context.DriveApp.getFolderById = id => id === 'event-folder' ? parent : root;
+  const files = env.context.DriveApp.getFileById;
+  const placements = [];
+  env.context.DriveApp.getFileById = id => {
+    const file = files(id);
+    const copy = file.makeCopy;
+    file.makeCopy = (name, folder) => { placements.push(['template', folder.getId()]); return copy(name, folder); };
+    file.moveTo = folder => { placements.push([id, folder.getId()]); return file; };
+    return file;
+  };
+  env.properties.set('PIPELINE_PARENT_FOLDER_ID', 'https://drive.google.com/drive/folders/event-folder?usp=sharing');
+  const status = env.context.setupClaimPipeline();
+  assert.equal(status.parentFolderUrl, 'https://drive.google.com/drive/folders/event-folder');
+  assert.deepEqual(placements, [['template', 'root-id'], ['register-id', 'root-id'], ['form-id', 'root-id']]);
+  assert.equal(env.calls.filter(call => call[0] === 'folder')[0][1], 'event-folder');
+});
+
+test('active setup relocates the claims folder without recreating assets or resetting claims', () => {
+  const env = environment();
+  env.context.setupClaimPipeline(); const upload = env.addUpload(); env.context.activateClaimPipeline();
+  const before = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  const saved = [{ id: 'response-existing', receiptNumber: 7, status: 'DONE' }];
+  env.store.records = () => saved;
+  let location = null;
+  let moves = 0;
+  const parent = { getId: () => 'event-folder', isTrashed: () => false };
+  const root = {
+    getId: () => before.rootFolderId,
+    getParents() {
+      const parents = location ? [location] : [];
+      return { hasNext: () => parents.length > 0, next: () => parents.shift() };
+    },
+    moveTo(folder) { location = folder; moves++; return this; }
+  };
+  env.context.Drive = { Files: { get: () => ({
+    mimeType: 'application/vnd.google-apps.folder', capabilities: { canAddChildren: true }
+  }) } };
+  env.context.DriveApp.getFolderById = id => id === 'event-folder' ? parent : root;
+  env.properties.set('PIPELINE_PARENT_FOLDER_ID', 'event-folder');
+
+  assert.equal(env.context.setupClaimPipeline().stage, 'ACTIVE');
+  env.context.setupClaimPipeline();
+  assert.equal(location, parent);
+  assert.equal(moves, 1);
+  const after = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  assert.deepEqual(after, { ...before, parentFolderId: 'event-folder' });
+  assert.deepEqual(env.store.records(), saved);
+  assert.ok(env.items.includes(upload));
+  assert.equal(env.triggers.length, 1);
+  assert.equal(env.form.published, true);
+  assert.equal(env.form.accepting, true);
+  for (const effect of ['folder', 'template', 'register', 'form']) {
+    assert.equal(env.calls.filter(call => call[0] === effect).length, 1);
+  }
+});
+
+test('true enables one required Congregation dropdown using the template options', () => {
+  const env = environment();
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+  const status = env.context.setupClaimPipeline();
+  const config = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  const question = env.items.find(item => item.id === config.questions.congregation);
+  assert.equal(status.askCongregation, true);
+  assert.equal(status.defaultCongregation, null);
+  assert.equal(env.items.length, 6);
+  assert.equal(question.type, 'LIST');
+  assert.equal(question.required, true);
+  assert.deepEqual(question.choices, ['Youth', 'English']);
+  env.context.setupClaimPipeline();
+  assert.equal(env.items.filter(item => item.title === 'Congregation').length, 1);
+  assert.equal(JSON.parse(env.properties.get('KY_CLAIM_PIPELINE')).questions.congregation, question.id);
+});
+
+test('missing, false, null, and empty properties remove the question and default to Youth', () => {
+  for (const value of [null, 'false', 'null', '', 'FALSE']) {
+    const env = environment();
+    env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+    env.context.setupClaimPipeline();
+    if (value === null) env.properties.delete('PIPELINE_ASK_CONGREGATION');
+    else env.properties.set('PIPELINE_ASK_CONGREGATION', value);
+
+    const status = env.context.setupClaimPipeline();
+    assert.equal(status.askCongregation, false);
+    assert.equal(status.defaultCongregation, 'Youth');
+    assert.equal(env.items.filter(item => item.title === 'Congregation').length, 0);
+    const config = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+    assert.equal(config.questions.congregation, undefined);
+    env.context.setupClaimPipeline();
+    assert.equal(env.items.length, 5);
+  }
+});
+
+test('active forms can switch both ways without closing or replacing their resources', () => {
+  const env = environment();
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+  env.context.setupClaimPipeline();
+  const upload = env.addUpload();
+  env.context.activateClaimPipeline();
+  const before = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  env.properties.delete('PIPELINE_ASK_CONGREGATION');
+
+  assert.equal(env.context.setupClaimPipeline().askCongregation, false);
+  assert.equal(env.form.published, true);
+  assert.equal(env.form.accepting, true);
+  env.properties.set('PIPELINE_ASK_CONGREGATION', ' TRUE ');
+  assert.equal(env.context.setupClaimPipeline().askCongregation, true);
+  const after = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  for (const key of ['formId', 'registerId', 'rootFolderId', 'nativeTemplateId', 'uploadQuestionId']) {
+    assert.equal(after[key], before[key]);
+  }
+  assert.notEqual(after.questions.congregation, before.questions.congregation);
+  assert.equal(env.items.filter(item => item.title === 'Congregation').length, 1);
+  assert.ok(env.items.includes(upload));
+  assert.equal(env.triggers.length, 1);
+  for (const effect of ['folder', 'template', 'register', 'form']) {
+    assert.equal(env.calls.filter(call => call[0] === effect).length, 1);
+  }
+});
+
+test('activation also applies the congregation setting to an existing form', () => {
+  const env = environment();
+  env.context.setupClaimPipeline(); env.addUpload();
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+  assert.equal(env.context.activateClaimPipeline().askCongregation, true);
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'false');
+  assert.equal(env.context.activateClaimPipeline().askCongregation, false);
+  assert.equal(env.triggers.length, 1);
+});
+
+test('interrupted congregation deletion is recoverable on the next setup run', () => {
+  const env = environment();
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'false');
+  const remove = env.form.deleteItem;
+  let fail = true;
+  env.form.deleteItem = item => {
+    remove(item);
+    if (fail) { fail = false; throw new Error('Delete acknowledgement lost'); }
+  };
+  assert.throws(() => env.context.setupClaimPipeline(), /acknowledgement lost/);
+  assert.equal(env.context.setupClaimPipeline().askCongregation, false);
+  assert.equal(env.items.filter(item => item.title === 'Congregation').length, 0);
+  assert.equal(env.form.published, true);
+});
+
+test('Youth must be valid in the voucher template before removing an active question', () => {
+  const env = environment();
+  env.context.VoucherRenderer.templateOptions = () => ['English'];
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'false');
+  assert.throws(() => env.context.setupClaimPipeline(), /template must allow Youth/);
+  assert.equal(env.items.filter(item => item.title === 'Congregation').length, 1);
+  assert.equal(env.form.published, true);
+});
+
+test('ambiguous Congregation questions stop changes for review', () => {
+  const env = environment();
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  env.form.addListItem().setTitle('Congregation');
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'false');
+  assert.throws(() => env.context.setupClaimPipeline(), /Duplicate form questions/);
+  assert.equal(env.items.filter(item => item.title === 'Congregation').length, 2);
+});
+
+test('an interrupted question creation reuses the existing dropdown on rerun', () => {
+  const env = environment();
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  const existing = env.form.addListItem().setTitle('Congregation');
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+  env.context.setupClaimPipeline();
+  assert.equal(JSON.parse(env.properties.get('KY_CLAIM_PIPELINE')).questions.congregation, existing.id);
+  assert.equal(env.items.filter(item => item.title === 'Congregation').length, 1);
 });
 
 test('setup resumes an interrupted destination link without creating another form or register', () => {
@@ -161,6 +388,63 @@ test('response extraction uses item IDs, collected email, and submission timesta
   assert.equal(parsed.email, 'a@example.com');
   assert.equal(parsed.localSubmittedDate, '2026-11-12');
   assert.equal(parsed.fileIds[0], 'receipt-file-id');
+  assert.equal(parsed.congregation, 'Youth');
+});
+
+for (const enabled of [false, true]) {
+  test(`two submitted claims reach the weekly expense payload with congregation question ${enabled ? 'enabled' : 'disabled'}`, () => {
+    const env = environment();
+    if (enabled) env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+    env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+    const config = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+    const pipeline = connectProcessor(env);
+
+    for (const [id, amount] of [['r1', '12.50'], ['r2', '7.25']]) {
+      const result = env.context.onClaimFormSubmit({ source: env.form, response: submission(config, id, { amount }) });
+      assert.equal(result.status, 'DONE');
+    }
+    const records = [...pipeline.records.values()];
+    assert.deepEqual(records.map(record => record.receiptNumber), [1, 2]);
+    assert.ok(records.every(record => record.payload.congregation === (enabled ? 'English' : 'Youth')));
+    const payload = pipeline.rendered();
+    assert.equal(payload.claims.length, 2);
+    assert.equal(payload.claims.reduce((sum, claim) => sum + claim.amountCents, 0), 1975);
+    assert.ok(payload.claims.every(claim => claim.congregation === (enabled ? 'English' : 'Youth')));
+  });
+}
+
+test('disabled mode ignores a stale congregation answer rather than accepting an override', () => {
+  const env = environment();
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  const previous = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'false');
+  env.context.setupClaimPipeline();
+  const current = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  assert.equal(env.context.claimInput_(submission(previous, 'stale', { congregation: 'English' }), current).congregation, 'Youth');
+});
+
+test('property edits take effect only after the form setting is applied', () => {
+  const env = environment();
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'false');
+  const config = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  assert.equal(env.context.claimInput_(submission(config, 'unchanged'), config).congregation, 'English');
+  assert.equal(env.context.showClaimPipelineStatus().askCongregation, true);
+  assert.equal(env.context.setupClaimPipeline().askCongregation, false);
+});
+
+test('enabled mode requires a congregation answer before reserving a claim', () => {
+  const env = environment();
+  env.properties.set('PIPELINE_ASK_CONGREGATION', 'true');
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  const config = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  const pipeline = connectProcessor(env);
+  assert.throws(() => env.context.onClaimFormSubmit({
+    source: env.form, response: submission(config, 'missing', { congregation: undefined })
+  }), /Congregation is required/);
+  assert.equal(pipeline.records.size, 0);
 });
 
 test('replay skips completed responses and continues after an individual failure', () => {

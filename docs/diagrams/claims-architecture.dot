@@ -1,0 +1,23 @@
+digraph ClaimsArchitecture {
+  graph [rankdir=TB, bgcolor="white", pad=0.3, nodesep=0.5, ranksep=0.55];
+  node [shape=box, style="rounded,filled", fillcolor="#eef4fb", color="#52769b", fontname="DejaVu Sans", fontsize=14, margin="0.18,0.12"];
+  edge [color="#516273", fontname="DejaVu Sans", fontsize=11, arrowsize=0.75];
+  users [label="Claimants and finance IC", fillcolor="#f3f4f6", color="#8592a0"];
+  pipeline [label="ClaimPipeline\nForm events, settings, locks, manual actions"];
+  logic [label="ClaimProcessor + ClaimCore\nValidation, identities, saved stages, weekly payload"];
+  store [label="ClaimStore\nClaims / People / Weeks"];
+  files [label="ClaimFiles\nFolders, receipt moves, staged worksheets"];
+  voucher [label="VoucherRenderer + VoucherCore\nLayout, total checks, PDF export"];
+  platform [label="Google Workspace services\nForms, Drive, Sheets, Script Properties, LockService", fillcolor="#edf7ef", color="#52805b"];
+  users -> pipeline [label="form / editor actions"];
+  pipeline -> logic [label="process(input, config, store, ports)"];
+  logic -> store [label="load / persist"];
+  logic -> files [label="injected effects"];
+  files -> voucher [label="render the week"];
+  pipeline -> voucher [label="batch PDF action", style=dashed];
+  store -> platform [label="Sheets"];
+  files -> platform [label="Drive / Sheets"];
+  voucher -> platform [label="Sheets / export / Drive"];
+  pipeline -> platform [label="form, properties, locks", style=dashed];
+  {rank=same; store; files;}
+}

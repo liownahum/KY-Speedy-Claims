@@ -1,0 +1,27 @@
+digraph ClaimProcessing {
+  graph [rankdir=TB, bgcolor="white", pad=0.3, nodesep=0.45, ranksep=0.4];
+  node [shape=box, style="rounded,filled", fillcolor="#eef4fb", color="#52769b", fontname="DejaVu Sans", fontsize=13, margin="0.15,0.10"];
+  edge [color="#516273", fontname="DejaVu Sans", fontsize=11, arrowsize=0.75];
+  start [label="Form handler validates source\nand takes the script lock"];
+  lookup [label="Load saved claims by response ID"];
+  done [label="Already DONE?", shape=diamond, style=filled, fillcolor="#fff4db", color="#9d7d3c"];
+  finish [label="Return saved result\nNo processor effects", fillcolor="#edf7ef", color="#52805b"];
+  exists [label="Saved incomplete claim?", shape=diamond, style=filled, fillcolor="#fff4db", color="#9d7d3c"];
+  reserve [label="Validate new input and file identity\nReserve PENDING response + receipt number"];
+  effects [label="Ensure person and week\nSave workbook ID; file original receipt\nSave receiptsReady stage"];
+  render [label="Reconstruct canonical weekly payload\nRender and publish a staged worksheet"];
+  complete [label="Save DONE and clear error\nReturn result", fillcolor="#edf7ef", color="#52805b"];
+  invalid [label="Reject before Drive effects\nReservation may be absent or uncertain", fillcolor="#fff0eb", color="#a96951"];
+  error [label="Attempt to save ERROR\nRetain number, payload, and completed stages\nThrow for reporting / later retry", fillcolor="#fff0eb", color="#a96951"];
+  start -> lookup -> done;
+  done -> finish [label="yes"];
+  done -> exists [label="no"];
+  exists -> effects [label="yes: reuse saved payload / number"];
+  exists -> reserve [label="no"];
+  reserve -> effects [label="saved"];
+  reserve -> invalid [label="validation / reservation failure", style=dashed];
+  effects -> render -> complete;
+  effects -> error [label="failure", style=dashed];
+  render -> error [label="failure", style=dashed];
+  complete -> error [label="completion write fails", style=dashed];
+}

@@ -14,7 +14,7 @@ Status on 12 November 2026: the user confirmed that the latest prototype works f
 
 Live testing exposed and resolved the Drive API version mismatch, stale dropdown validation, and repeated/clipped PDF headers. The [developer prototype](prototype.md) also has 46 passing local checks. Exact counts for the long native test were not supplied; the complete boundary matrix, unusual text cases, and second-account setup are not implied by the confirmation.
 
-The voucher-rendering part is accepted for the reported short/long cases. Milestone 1 remains open for Google Form/receipt-upload feasibility and an independent second-account installation.
+The voucher-rendering part is accepted for the reported short/long cases. Basic multi-person submissions, folder handling, and receipt numbering have since been reported working by the user. Milestone 1 remains open for upload ownership/access checks and an independent second-account installation.
 
 ### Official template check
 
@@ -43,7 +43,7 @@ Do not treat a programmatically submitted FormResponse as proof of trigger behav
 
 Build configuration, registers, claimant lookup, global-within-event numbering, receipt routing, weekly document creation, and claim-row insertion.
 
-Current implementation: a standalone test setup creates the event resources; the owner manually adds one receipt-upload question, then activates the form trigger. Processing uses collected email, submission weeks in Singapore time, persisted per-event numbers, original upload file IDs, and staged voucher replacement in a stable weekly workbook. Manual retry and latest-voucher PDF export are included. See the [pipeline live-test guide](form-pipeline-test.md). Local service-substitute checks cover these paths; live browser submissions, ownership/access, concurrency, and second-account installation are still pending.
+Current implementation: a standalone test setup creates the event resources; the owner manually adds one receipt-upload question, then activates the form trigger. Processing uses collected email, submission weeks in Singapore time, persisted per-event numbers, original upload file IDs, and staged voucher replacement in a stable weekly workbook. Manual retry and PDF export for all current-week claimants are included. The user reported successful multi-person submissions, folder handling, and receipt numbering. See the [pipeline live-test guide](form-pipeline-test.md). Native batch PDF validation, upload ownership/access, recovery, concurrency, and second-account installation remain pending.
 
 Acceptance scenarios:
 
@@ -60,6 +60,7 @@ Acceptance scenarios:
 | Only one claim | Exactly one input row; unused input rows removed; total, signature areas, and helper values preserved. |
 | More claims than the template's initial rows | Add input rows to the same weekly voucher, preserving every receipt and updating totals, validation, footer positions, and print range. |
 | Long voucher spans physical pages | Every claim is legible and printed once; totals/signature area remains usable. Starting row count does not force a separate voucher. |
+| Export the current week | One PDF in each claimant's folder for everyone with claims that week; no output for people without current-week claims. |
 
 **Exit evidence:** successful real Forms-to-Drive-to-Sheets tests with synthetic data, including recovery and concurrent submissions.
 
@@ -67,6 +68,7 @@ Acceptance scenarios:
 
 - Provide event inputs in the Setup Workbook.
 - Create/configure the event folder, template copy, registers, response destination, form, and triggers.
+- Let the IC select an existing normal Drive event folder as the parent location. The Script Property version is implemented; native creation/relocation checks and a guided folder selector remain to be validated/built.
 - Save resource IDs, settings, and software/template versions for that installation.
 - Make repeated or interrupted setup reuse its resources.
 - Display a setup summary and a test-submission check.

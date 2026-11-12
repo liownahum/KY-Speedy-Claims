@@ -1,0 +1,19 @@
+digraph VoucherPublication {
+  graph [rankdir=TB, bgcolor="white", pad=0.3, nodesep=0.5, ranksep=0.45];
+  node [shape=box, style="rounded,filled", fillcolor="#eef4fb", color="#52769b", fontname="DejaVu Sans", fontsize=13, margin="0.16,0.12"];
+  edge [color="#516273", fontname="DejaVu Sans", fontsize=11, arrowsize=0.75];
+  old [label="Existing weekly workbook\nKeep the previous active voucher"];
+  copy [label="Copy the pristine template tab\nto a unique staging sheet"];
+  render [label="Render exactly N claims\nVerify the recalculated total"];
+  publish [label="Save new rendered pointer, fingerprint,\nrevision, and previous owned sheet IDs", fillcolor="#edf7ef", color="#52805b", penwidth=2];
+  cleanup [label="Remove only previous owned / reserved garbage\nChoose an available Voucher name and activate"];
+  final [label="Stable workbook ID\nNew active worksheet and print metadata", fillcolor="#edf7ef", color="#52805b"];
+  before [label="Failure before pointer publication\nPrevious active voucher remains available", fillcolor="#fff0eb", color="#a96951"];
+  after [label="Failure after pointer publication\nReload saved metadata on retry\nReuse committed render and finish cleanup", fillcolor="#fff0eb", color="#a96951"];
+  uncertain [label="Unknown persistence acknowledgement:\nread canonical Weeks metadata\nbefore deciding what committed", shape=note, fillcolor="#fff4db", color="#9d7d3c"];
+  old -> copy -> render -> publish -> cleanup -> final;
+  render -> before [label="failure", style=dashed];
+  cleanup -> after [label="failure", style=dashed];
+  after -> final [label="retry / finish", style=dashed];
+  publish -> uncertain [label="write throws", style=dashed];
+}

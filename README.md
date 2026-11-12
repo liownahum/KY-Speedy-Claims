@@ -2,9 +2,11 @@
 
 KY Speedy Claims helps an event's finance IC collect receipt submissions, organise them in Google Drive, and prepare each claimant's weekly claim document using the finance department's standard template.
 
-**Status:** the user confirmed successful one-line and long voucher exports in a live Google Apps Script run on 12 November 2026. A first form-submission pipeline is now implemented for manual testing: setup, receipt numbering/routing, weekly workbooks, retries, and PDF export. Its native Google trigger/upload behaviour is not yet validated. Guided setup, second-account installation, and the documentation website remain future work.
+**Status:** on 12 November 2026, the user confirmed successful one-line and long voucher exports and reported working multi-person submissions, folder handling, and receipt numbering. The pipeline includes setup, weekly workbooks, and retries. Batch PDF export for every current-week claimant is now implemented and awaiting native validation. Upload ownership/access, recovery, concurrency, guided setup, second-account installation, and the documentation website remain further work.
 
 ## Intended experience
+
+The guided Setup Workbook in this planned experience is not available yet. Use the [User Guide](docs/UserGuide.md) for the current Apps Script setup and operation.
 
 1. A finance IC copies the setup workbook, enters event settings, and authorises setup.
 2. Setup prepares the event's folders, submission form, registers, template copy, and automatic processing.
@@ -16,6 +18,8 @@ Each event operates independently under its finance IC's Google account. Receipt
 
 ## Project documentation
 
+- [User Guide](docs/UserGuide.md): setup, event folders, claimant submissions, weekly PDFs, retries, and troubleshooting.
+- [Developer Guide](docs/DeveloperGuide.md): architecture, data/state contracts, feature implementation, design choices, tests, requirements, and manual acceptance cases.
 - [Requirements](docs/requirements.md): agreed behaviour and proposed details.
 - [Decision log](docs/decisions.md): confirmed choices and unresolved questions.
 - [Build roadmap](docs/roadmap.md): milestones and evidence needed before moving forward.
@@ -32,7 +36,7 @@ The official template has been supplied and inspected. Finance requires a printe
 
 Each weekly voucher must have exactly one input row per included claim. Delete unused input rows and add rows when needed, preserving the official headings, styling, totals, and signature sections. The original template's row counts are starting layouts, not claim limits.
 
-The copy/fill/resize/export path has passed the user's short/long live tests. Next is the real Forms-to-Drive-to-Sheets test using synthetic data. Claims use submission weeks, Monday–Sunday in Singapore time. Form-upload ownership and independent second-account setup must also be proved before accepting the guided installer.
+The copy/fill/resize/export path has passed the user's short/long live tests, and basic multi-person submissions, folders, and numbering have been reported working. The newer current-week batch PDF and parent-folder placement/relocation features still need native validation. Claims use submission weeks, Monday–Sunday in Singapore time. Upload ownership/access, failure recovery, concurrency, and independent second-account setup must also be proved before accepting the guided installer.
 
 ## Local development
 
@@ -49,6 +53,12 @@ npm run bundle
 The bundle command prepares a single Code.gs, appsscript.json, and quick-start guide under local/live-test. The bundled manifest uses Drive API v2; the importer supports either v2 or v3. Updating GitHub does not replace code already pasted into a Google project.
 
 For the new submission test, use `npm run bundle -- /absolute/path/to/form-test --pipeline` to include the form-testing guide. Replace both the script and manifest; the pipeline requires Forms and trigger-management permissions too.
+
+The form defaults Congregation to Youth without asking the claimant. Set Script Property `PIPELINE_ASK_CONGREGATION` to `true` and rerun `setupClaimPipeline` to show the dropdown; remove the property or set it to `false` and rerun setup to return to Youth automatically. This setting can also be applied to an active form. See the [form guide](docs/form-pipeline-test.md#changing-the-congregation-setting).
+
+Set `PIPELINE_PARENT_FOLDER_ID` to your existing event folder's ID or full folder link and run `setupClaimPipeline` to place the claims folder alongside your planning documents. This also relocates an existing installation's claims folder while retaining its files, links, and receipt numbers. Normal Drive folders shared with the IC are supported; Workspace Shared Drives are not. See the [event folder guide](docs/form-pipeline-test.md#choosing-the-event-folder) for access requirements and moving an installation.
+
+Run `exportWeeklyClaimVouchers` to save a PDF in every current-week claimant's folder. People without claims in that Singapore submission week are skipped. The previous `exportLatestClaimVoucher` entry point now runs the same batch export. See the [weekly export guide](docs/form-pipeline-test.md#export-all-current-week-claimants) for results, retries, and PDF revisions.
 
 Do not redesign the official output document. The input Google Form and internal registers are separate from that standardised document.
 

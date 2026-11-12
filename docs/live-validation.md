@@ -1,4 +1,4 @@
-# Live voucher validation
+# Live validation
 
 ## Confirmed result
 
@@ -22,13 +22,20 @@ The live-test sequence exposed and corrected Drive v2/v3 import compatibility, t
 
 The same source has 46 passing local tests covering row-count boundaries, cent totals, receipt identities, strict dropdowns, original-template protection, import branches, and PDF request/error handling. Local service-model tests remain separate from native visual evidence.
 
+## Multi-person pipeline report
+
+On 12 November 2026, the user reported testing multiple people and said folder handling/numbering and receipt numbering appeared to work. The latest delivered code at that point was the optional-congregation bundle with source fingerprint prefix `10e408dbd6e1`, based on `aad77d7` plus local congregation-switch changes. The exact installed fingerprint, claimant count, and receipt counts were not independently confirmed. This is user-run manual evidence, not an assistant inspection of the protected Google resources.
+
+The user then observed that PDF export generated only the latest claimant's PDF and clarified that it must cover all people with claims in the current week. That batch-export change is now implemented locally but has not yet been validated in Google. This report does not establish simultaneous submissions, upload ownership/access boundaries, retries after interrupted processing, or an independent second-IC installation.
+
 ## Remaining work
 
-This confirmation does not validate the complete claims workflow. Still outstanding:
+These confirmations do not validate the complete claims workflow. Still outstanding:
 
-- Google Form creation/copying, receipt-upload ownership/routing, and a real submission trigger.
-- Event-wide receipt number allocation and retry-safe processing.
-- Creating/reusing claimant folders and weekly vouchers across multiple submissions.
+- Batch PDF export for every current-week claimant, including skipping people with no current-week claims.
+- Receipt-upload ownership and permissions, plus form copying for independent installations.
+- Retry-safe number allocation and recovery without duplicate rows/files after failures.
+- A detailed native run record for weekly workbook reuse and week boundaries.
 - Concurrent submissions, corrections, and recovery after interrupted live processing.
 - Installation under a second finance IC's independent Google account.
 - Any specific production continuation-heading requirements, long-name/description cases, and a fully documented native run matrix.

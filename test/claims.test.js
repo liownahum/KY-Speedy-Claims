@@ -141,6 +141,20 @@ test('a later claim can rebuild the week after an earlier rendering failure', ()
   assert.equal(env.rendered.get('week-0').claims.length, 2);
 });
 
+test('retrying a saved claim keeps its original congregation after form settings change', () => {
+  const env = environment();
+  const original = input('r1'); original.congregation = 'English';
+  env.failure = 'render';
+  assert.throws(() => env.process(original), /Simulated/);
+  assert.equal(env.records.get('r1').payload.congregation, 'English');
+
+  const current = input('r1'); current.congregation = 'Youth';
+  assert.equal(env.process(current).status, 'DONE');
+  assert.equal(env.records.get('r1').payload.congregation, 'English');
+  assert.equal(env.rendered.get('week-0').claims[0].congregation, 'English');
+  assert.equal(env.records.get('r1').receiptNumber, 1);
+});
+
 test('an uncertain reservation write is recovered using the saved response ID', () => {
   const env = environment(); const save = env.store.saveRecord;
   let first = true;

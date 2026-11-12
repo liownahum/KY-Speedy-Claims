@@ -14,6 +14,7 @@ Different events have different finance ICs. Each IC needs an independent claims
 - Automate creation and configuration of the files and folders needed for an event as far as Google permits.
 - The IC should use a guided interface rather than edit source code or manually connect file IDs.
 - Preserve documentation of the system, plan, and decisions in this repository.
+- Allow the IC to select an existing normal Drive event folder, including a folder shared with them, using `PIPELINE_PARENT_FOLDER_ID` (D15). Place the claims folder and finance resources inside that location. Rerunning setup for an existing installation relocates the same claims folder without replacing its files or resetting receipt numbering.
 
 ### Standard weekly claim document
 
@@ -30,6 +31,7 @@ Different events have different finance ICs. Each IC needs an independent claims
 - Export the payment voucher as a PDF when preparing physical submission. Preserve the template's signature/approval areas for the proper signatories.
 - Select the intended voucher sheet and print range explicitly, and validate A4 pagination. Do not export unrelated worksheets or dropdown helper cells.
 - Retain the editable weekly source and associate exported submission PDFs with their source revision.
+- Export a PDF for every person with claims in the current Monday–Sunday submission week, saving each PDF in that person's folder. Do nothing for people with no claims that week; do not fall back to their latest older claim (D14).
 
 ### Submission processing
 
@@ -64,7 +66,7 @@ These details are proposals until confirmed or validated by the feasibility prot
 | Purchase date | Expense date retained separately from submission time |
 | Event title | Description component; may be preconfigured per event |
 | Item description | Description component |
-| Congregation | Official template's group field; validate options against the intended congregation list |
+| Congregation | Official template's group field; use Youth by default. Only ask the claimant when `PIPELINE_ASK_CONGREGATION` is true, validating against the template's congregation list (D13). |
 | Amount claimed | Positive amount in the configured currency |
 | Receipt upload | Required image; decide whether to accept PDF and multiple pages |
 
