@@ -10,17 +10,17 @@ Deliverables: README, [requirements](requirements.md), [decision log](decisions.
 
 This is the first implementation milestone. Use synthetic claim data and two Google accounts representing different finance ICs.
 
-Progress on 12 November 2026: source template inspected, field ranges and capacities documented, and a blank full voucher exported and visually checked as one A4 page. User confirmed printed submission via PDF and Group = Congregation. See [template findings](voucher-template.md). Filling a disposable copy, conversion testing, and second-account setup are still outstanding.
+Progress on 12 November 2026: source template inspected, original field ranges and row counts documented, and a blank full voucher exported and visually checked as one A4 page. User confirmed printed submission via PDF, Group = Congregation, and exactly one input row per claim by adding/deleting input rows. See [template findings](voucher-template.md). Filling/resizing a disposable copy, conversion testing, and second-account setup are still outstanding.
 
 ### Official template check
 
 - Obtain the blank original and identify the header cells, claim-entry range, formulas, signatures, and print area.
 - Confirm the required finance submission format.
-- Fill one synthetic claimant and receipt without changing the prescribed structure.
+- Fill one synthetic claimant and receipt, deleting surplus unused input rows while preserving the official labels, styling, total, and signature areas.
 - Compare the generated/exported result visually with the official original.
-- Establish the approved overflow behaviour before assuming rows may be inserted.
+- Implement the confirmed dynamic-row rule: exactly one input row per included claim; add rows before the total when needed. Keep receipt identities stable, preserve helper lists and validation, and update footer/formula/print boundaries.
 - Verify that only the chosen payment voucher range is exported. A generic export of this workbook produced three Letter-size pages and split the full voucher's totals/signature area; explicitly scoped A4 export produced one intact full-voucher page.
-- Test long names, payment details, descriptions, all 30 full-voucher rows, and a claim exceeding capacity. Preserve the template's official labels and signature lines.
+- Test 1, 2, 7, 8, 30, and 31 claims plus a larger multi-page voucher. Check exact row counts, all claim values, totals, footer positions, helper-list preservation, and readable PDF pagination. Test long names, payment details, and descriptions while retaining the official labels and signature lines.
 
 ### Independent installation check
 
@@ -44,14 +44,16 @@ Acceptance scenarios:
 | Scenario | Required result |
 | --- | --- |
 | First claim from a new person | Person folder, receipts folder, and weekly document created; header and first row filled. |
-| Same person and week | Existing resources reused; one new claim row. |
+| Same person and week | Existing resources reused; one new claim row inserted before the total, with formula and footer updated. |
 | Same person and a new week | New weekly document; existing person and receipts folders reused. |
 | Different people submit together | Distinct receipt numbers; no duplicate folders or weekly documents. |
 | Same submission processed again | Same assigned number; no duplicate rows or files. |
 | Failure after a number/file/row is created | Recovery resumes with saved IDs and number; completed actions are not repeated. |
 | Different event | Separate data and sequence; event code distinguishes the receipt reference. |
 | Week boundary and late purchase | Routing follows the explicitly chosen rule and timezone. |
-| Standard template is full | Approved overflow behaviour; no unapproved structural changes. |
+| Only one claim | Exactly one input row; unused input rows removed; total, signature areas, and helper values preserved. |
+| More claims than the template's initial rows | Add input rows to the same weekly voucher, preserving every receipt and updating totals, validation, footer positions, and print range. |
+| Long voucher spans physical pages | Every claim is legible and printed once; totals/signature area remains usable. Starting row count does not force a separate voucher. |
 
 **Exit evidence:** successful real Forms-to-Drive-to-Sheets tests with synthetic data, including recovery and concurrent submissions.
 

@@ -21,8 +21,11 @@ Different events have different finance ICs. Each IC needs an independent claims
 - Header contains the claimant's full name and payment details.
 - Claim columns are receipt number, description, group, and amount.
 - Description combines event title and item description.
-- Use the finance department's standardised template. Its structure must not be redesigned.
-- Fill only permitted fields. Confirm overflow and export behaviour against the actual template before implementation.
+- Use the finance department's standardised template, preserving its labels, column layout, styling, totals, and signature sections.
+- The claim input section must contain exactly one row per included claim. For one claim, delete all other unused input rows. Add input rows when more are needed. This resizing is explicitly authorised by the user.
+- Shift the totals and footer with the resized input section, update the total formula to cover all included claims, and derive the print range from the resulting layout. The original input-row count is not a limit and does not require a separate voucher.
+- Preserve each existing receipt number when resizing; receipt numbers are independent of worksheet row positions.
+- Preserve helper lists and apply the intended row styling and congregation validation to all new input rows. Deleting unused rows must not destroy helper data.
 - The official document labels the group column Congregation; the user confirmed these are the same field.
 - Export the payment voucher as a PDF when preparing physical submission. Preserve the template's signature/approval areas for the proper signatories.
 - Select the intended voucher sheet and print range explicitly, and validate A4 pagination. Do not export unrelated worksheets or dropdown helper cells.
@@ -99,7 +102,7 @@ The IC authorises their installation under the account intended to operate the e
 - Approval, payment execution, receipt OCR, and cross-event accounting integration are not initial implementation commitments.
 - Approved/paid weeks, corrections, payment-detail changes, and duplicates need explicit rules before operational use.
 - A documentation site does not execute the Google automation.
-- See [voucher template findings](voucher-template.md) for inspected ranges, fixed capacities, and export evidence. A filled-voucher PDF and Google Sheets conversion remain to be tested.
+- See [voucher template findings](voucher-template.md) for original ranges, authorised row resizing, and export evidence. Filled-voucher PDFs, resizing, and Google Sheets conversion remain to be tested.
 
 ## Known platform constraints to validate
 
