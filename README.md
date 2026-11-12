@@ -24,6 +24,7 @@ Each event operates independently under its finance IC's Google account. Receipt
 - [Manual live test](docs/manual-test.md): one-file setup, existing-project updates, and Drive API v2/v3 compatibility.
 - [Live validation record](docs/live-validation.md): confirmed short/long exports, tested build, evidence folder, and remaining scope.
 - [Form pipeline live test](docs/form-pipeline-test.md): create the test event/form, add the receipt-upload question, activate, and verify browser-submitted claims.
+- [Implementation iterations](docs/iterations.md): source commits, tested builds, and how to reproduce a script/manifest bundle.
 
 ## Current milestone
 
