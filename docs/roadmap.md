@@ -43,6 +43,8 @@ Do not treat a programmatically submitted FormResponse as proof of trigger behav
 
 Build configuration, registers, claimant lookup, global-within-event numbering, receipt routing, weekly document creation, and claim-row insertion.
 
+Current implementation: a standalone test setup creates the event resources; the owner manually adds one receipt-upload question, then activates the form trigger. Processing uses collected email, submission weeks in Singapore time, persisted per-event numbers, original upload file IDs, and staged voucher replacement in a stable weekly workbook. Manual retry and latest-voucher PDF export are included. See the [pipeline live-test guide](form-pipeline-test.md). Local service-substitute checks cover these paths; live browser submissions, ownership/access, concurrency, and second-account installation are still pending.
+
 Acceptance scenarios:
 
 | Scenario | Required result |

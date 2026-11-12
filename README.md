@@ -2,7 +2,7 @@
 
 KY Speedy Claims helps an event's finance IC collect receipt submissions, organise them in Google Drive, and prepare each claimant's weekly claim document using the finance department's standard template.
 
-**Status:** the user confirmed successful one-line and long voucher exports in a live Google Apps Script run on 12 November 2026. The voucher prototype is validated for those manual cases; see the linked validation record for build and evidence details. Form submission processing, guided event setup, second-account installation, and the documentation website are not implemented/verified yet.
+**Status:** the user confirmed successful one-line and long voucher exports in a live Google Apps Script run on 12 November 2026. A first form-submission pipeline is now implemented for manual testing: setup, receipt numbering/routing, weekly workbooks, retries, and PDF export. Its native Google trigger/upload behaviour is not yet validated. Guided setup, second-account installation, and the documentation website remain future work.
 
 ## Intended experience
 
@@ -23,6 +23,7 @@ Each event operates independently under its finance IC's Google account. Receipt
 - [Prototype guide](docs/prototype.md): developer setup, synthetic voucher runs, test coverage, and remaining live checks.
 - [Manual live test](docs/manual-test.md): one-file setup, existing-project updates, and Drive API v2/v3 compatibility.
 - [Live validation record](docs/live-validation.md): confirmed short/long exports, tested build, evidence folder, and remaining scope.
+- [Form pipeline live test](docs/form-pipeline-test.md): create the test event/form, add the receipt-upload question, activate, and verify browser-submitted claims.
 
 ## Current milestone
 
@@ -30,7 +31,7 @@ The official template has been supplied and inspected. Finance requires a printe
 
 Each weekly voucher must have exactly one input row per included claim. Delete unused input rows and add rows when needed, preserving the official headings, styling, totals, and signature sections. The original template's row counts are starting layouts, not claim limits.
 
-The copy/fill/resize/export path has passed the user's short/long live tests. Next is claim intake: connect form submissions to the event register, receipt numbering/routing, and the appropriate person's weekly voucher. Form-upload ownership and independent second-account setup must also be proved before accepting the guided installer.
+The copy/fill/resize/export path has passed the user's short/long live tests. Next is the real Forms-to-Drive-to-Sheets test using synthetic data. Claims use submission weeks, Monday–Sunday in Singapore time. Form-upload ownership and independent second-account setup must also be proved before accepting the guided installer.
 
 ## Local development
 
@@ -42,9 +43,11 @@ npm test
 npm run bundle
 ```
 
-`src/` is the Apps Script project. `test/` exercises the pure voucher planner, rendering adapter, PDF response handling, and copy/conversion runner using in-memory Google service substitutes. These tests do not establish native Google layout fidelity.
+`src/` is the Apps Script project. `test/` exercises vouchers, pipeline setup/activation, register persistence, submission grouping/numbering, file routing, and retry behaviour using in-memory Google service substitutes. These tests do not establish native Google layout fidelity, authorisation, trigger delivery, or file-upload behaviour.
 
 The bundle command prepares a single Code.gs, appsscript.json, and quick-start guide under local/live-test. The bundled manifest uses Drive API v2; the importer supports either v2 or v3. Updating GitHub does not replace code already pasted into a Google project.
+
+For the new submission test, use `npm run bundle -- /absolute/path/to/form-test --pipeline` to include the form-testing guide. Replace both the script and manifest; the pipeline requires Forms and trigger-management permissions too.
 
 Do not redesign the official output document. The input Google Form and internal registers are separate from that standardised document.
 

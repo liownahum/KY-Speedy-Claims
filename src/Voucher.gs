@@ -51,17 +51,20 @@ var VoucherRenderer = (function () {
     return 8 + Math.ceil(sheet.getRange(address).getFontSize() * 4 / 3 * 1.4);
   }
 
-  function render(spreadsheet, payload, sourceFileId) {
+  function render(spreadsheet, payload, sourceFileId, destination) {
+    destination = destination || {};
+    var sheetName = destination.sheetName || SHEET_NAME;
+    var configName = destination.configName || CONFIG_NAME;
     var plan = VoucherCore.plan(payload);
     if (!sourceFileId || spreadsheet.getId() === sourceFileId) {
       throw new Error('Render into a disposable copy, never the source template.');
     }
-    var sheet = spreadsheet.getSheetByName(SHEET_NAME);
+    var sheet = spreadsheet.getSheetByName(sheetName);
     var options = validateTemplate(sheet);
     plan.congregations.forEach(function (value) {
       if (options.indexOf(value) === -1) throw new Error('A claim has an unsupported congregation.');
     });
-    if (spreadsheet.getSheetByName(CONFIG_NAME)) {
+    if (spreadsheet.getSheetByName(configName)) {
       throw new Error('Prototype configuration already exists; use a fresh template copy.');
     }
     var baseHeight = sheet.getRowHeight(12);
@@ -76,7 +79,7 @@ var VoucherRenderer = (function () {
     );
 
     // Save helper values and a clean row style before whole-row deletion can move them.
-    var helper = spreadsheet.insertSheet(CONFIG_NAME);
+    var helper = spreadsheet.insertSheet(configName);
     var list = helper.getRange(1, 1, options.length, 1);
     list.setValues(options.map(function (value) { return [VoucherCore.literal(value)]; }));
     var rowStyle = helper.getRange('C10:I10');
@@ -121,6 +124,7 @@ var VoucherRenderer = (function () {
     }
     return {
       spreadsheetId: spreadsheet.getId(), sheetId: sheet.getSheetId(),
+      helperSheetId: helper.getSheetId(),
       claimCount: plan.claimCount, totalCents: plan.totalCents,
       lastPrintRow: plan.lastPrintRow, needsPrintReview: true
     };
@@ -145,5 +149,8 @@ var VoucherRenderer = (function () {
     return folder.createFile(blob.setName(filename));
   }
 
-  return { render: render, exportPdf: exportPdf };
+  return {
+    render: render, exportPdf: exportPdf,
+    templateOptions: function (spreadsheet) { return validateTemplate(spreadsheet.getSheetByName(SHEET_NAME)); }
+  };
 }());

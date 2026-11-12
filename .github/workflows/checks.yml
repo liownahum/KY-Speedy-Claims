@@ -13,3 +13,4 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run bundle
+      - run: npm run bundle -- --pipeline
