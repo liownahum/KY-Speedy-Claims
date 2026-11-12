@@ -12,6 +12,8 @@ This is the first implementation milestone. Use synthetic claim data and two Goo
 
 Progress on 12 November 2026: source template inspected, original field ranges and row counts documented, and a blank full voucher exported and visually checked as one A4 page. User confirmed printed submission via PDF, Group = Congregation, and exactly one input row per claim by adding/deleting input rows. See [template findings](voucher-template.md). Filling/resizing a disposable copy, conversion testing, and second-account setup are still outstanding.
 
+Implementation started after PR #1 was merged on 12 November 2026. The [developer prototype](prototype.md) contains copy/conversion, input validation, helper-preserving row resizing, totals, formatting, and scoped PDF export. Local service-model checks pass; live Google authorisation, conversion, rendering, and print-review evidence remain outstanding. Milestone 1 is not yet complete.
+
 ### Official template check
 
 - Obtain the blank original and identify the header cells, claim-entry range, formulas, signatures, and print area.

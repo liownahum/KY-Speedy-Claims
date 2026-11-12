@@ -2,7 +2,7 @@
 
 KY Speedy Claims helps an event's finance IC collect receipt submissions, organise them in Google Drive, and prepare each claimant's weekly claim document using the finance department's standard template.
 
-**Status:** requirements and feasibility planning. No working automation or published documentation website is included yet.
+**Status:** initial Google Apps Script voucher prototype implemented with local automated checks. Live Google conversion, rendering, and PDF pagination still need authorisation and verification. Form submission processing, guided event setup, and the documentation website are not implemented yet.
 
 ## Intended experience
 
@@ -20,6 +20,7 @@ Each event operates independently under its finance IC's Google account. Receipt
 - [Decision log](docs/decisions.md): confirmed choices and unresolved questions.
 - [Build roadmap](docs/roadmap.md): milestones and evidence needed before moving forward.
 - [Voucher template findings](docs/voucher-template.md): verified fields, dynamic claim rows, and A4 PDF export requirements.
+- [Prototype guide](docs/prototype.md): developer setup, synthetic voucher runs, test coverage, and remaining live checks.
 
 ## What comes first
 
@@ -27,7 +28,18 @@ The official template has been supplied and inspected. Finance requires a printe
 
 Each weekly voucher must have exactly one input row per included claim. Delete unused input rows and add rows when needed, preserving the official headings, styling, totals, and signature sections. The original template's row counts are starting layouts, not claim limits.
 
-Next, test a disposable copy with one claim and with more claims than the template initially provides, verify totals and PDF pagination, then test form copying and receipt uploads under a second Google account before building the full installer.
+The prototype now contains that copy/fill/resize/export path. Next, authorise a developer test run in Google and visually verify one-claim and larger filled PDFs, then test form copying and receipt uploads under a second Google account before building the full installer.
+
+## Local development
+
+Use Node.js 20 or later. No dependency installation is needed for the local checks:
+
+```sh
+npm run check
+npm test
+```
+
+`src/` is the Apps Script project. `test/` exercises the pure voucher planner, rendering adapter, PDF response handling, and copy/conversion runner using in-memory Google service substitutes. These tests do not establish native Google layout fidelity.
 
 Do not redesign the official output document. The input Google Form and internal registers are separate from that standardised document.
 

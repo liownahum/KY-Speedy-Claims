@@ -40,7 +40,7 @@ Addresses below refer to the unresized supplied source version. Check the labels
 
 The header labels must remain exactly as supplied, including `R No.`, `Congregation`, and `Bank A/c/PayNow:`. The full name instruction requests the name as per NRIC; it does not call for collecting an NRIC number.
 
-Description regions and header input spans are not merged in the exported workbook. Text placement must be visually tested when adjacent cells are populated. Do not assume wrapping a single C-column cell will use the width through F, or merge cells silently as a layout workaround.
+Description regions and header input spans are not merged in the exported workbook. The first prototype explicitly merges C:F within each existing visible Description column, and merges the blank name/payment spans, only in its disposable working copy. This supports wrapping without changing the visible table columns. The original is unchanged. Native rendering must confirm the resulting text placement and visual fidelity.
 
 ## Formulas and congregation validation
 
@@ -89,6 +89,8 @@ These are observed export results, not a guarantee of filled-document fidelity. 
 Full-page is proposed as the base for the first filled prototype, with its input section resized to the claim count. The row-resizing rule is confirmed. Base-layout selection, printable pagination, voucher-date meaning, and correction/closure rules are still open. Truncating claims or treating the base row count as a limit does not meet the requirement.
 
 ## Remaining prototype checks
+
+The copy/fill/resize/export path is now implemented in src/ and tested with local Google service substitutes. The [prototype guide](prototype.md) describes its scope and the native checks below, which remain outstanding.
 
 - Create a disposable working copy and validate any conversion to native Google Sheets against this original.
 - Fill a synthetic name, clearly fictional payment placeholder, date, and Congregation. Test 1, 2, 7, 8, 30, and 31 claims, plus a larger multi-page example. Confirm exact input-row counts, all receipts, formula ranges, totals, footer positions, and readable PDF pagination.
