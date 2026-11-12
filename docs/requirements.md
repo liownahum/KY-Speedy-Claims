@@ -23,6 +23,10 @@ Different events have different finance ICs. Each IC needs an independent claims
 - Description combines event title and item description.
 - Use the finance department's standardised template. Its structure must not be redesigned.
 - Fill only permitted fields. Confirm overflow and export behaviour against the actual template before implementation.
+- The official document labels the group column Congregation; the user confirmed these are the same field.
+- Export the payment voucher as a PDF when preparing physical submission. Preserve the template's signature/approval areas for the proper signatories.
+- Select the intended voucher sheet and print range explicitly, and validate A4 pagination. Do not export unrelated worksheets or dropdown helper cells.
+- Retain the editable weekly source and associate exported submission PDFs with their source revision.
 
 ### Submission processing
 
@@ -51,12 +55,12 @@ These details are proposals until confirmed or validated by the feasibility prot
 | Input | Proposed use |
 | --- | --- |
 | Verified email or member ID | Stable claimant identity; names are display labels |
-| Full name | Folder label and document header |
-| Payment details | Document header; exact fields await the official template |
+| Full name | Folder label and Pay to field; use name as stated by the template, without collecting an NRIC number |
+| Payment details | Bank A/c/PayNow field; exact structured input and update policy still to be chosen |
 | Purchase date | Expense date retained separately from submission time |
 | Event title | Description component; may be preconfigured per event |
 | Item description | Description component |
-| Group | Configurable dropdown |
+| Congregation | Official template's group field; validate options against the intended congregation list |
 | Amount claimed | Positive amount in the configured currency |
 | Receipt upload | Required image; decide whether to accept PDF and multiple pages |
 
@@ -95,6 +99,7 @@ The IC authorises their installation under the account intended to operate the e
 - Approval, payment execution, receipt OCR, and cross-event accounting integration are not initial implementation commitments.
 - Approved/paid weeks, corrections, payment-detail changes, and duplicates need explicit rules before operational use.
 - A documentation site does not execute the Google automation.
+- See [voucher template findings](voucher-template.md) for inspected ranges, fixed capacities, and export evidence. A filled-voucher PDF and Google Sheets conversion remain to be tested.
 
 ## Known platform constraints to validate
 

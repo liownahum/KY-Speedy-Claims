@@ -19,10 +19,13 @@ Each event operates independently under its finance IC's Google account. Receipt
 - [Requirements](docs/requirements.md): agreed behaviour and proposed details.
 - [Decision log](docs/decisions.md): confirmed choices and unresolved questions.
 - [Build roadmap](docs/roadmap.md): milestones and evidence needed before moving forward.
+- [Voucher template findings](docs/voucher-template.md): verified fields, row capacity, and A4 PDF export requirements.
 
 ## What comes first
 
-Obtain the blank official claim template and confirm the finance department's required submission format. Then test form copying and receipt uploads under a second Google account before building the full installer.
+The official template has been supplied and inspected. Finance requires a printed payment voucher, so the submission output is a PDF prepared for printing. A blank full-page voucher has been verified as a single A4 PDF using an explicit sheet and print range.
+
+Next, fill a disposable copy with synthetic claim data and verify the PDF, then test form copying and receipt uploads under a second Google account before building the full installer. Decide the overflow rule before implementing a full weekly voucher.
 
 Do not redesign the official output document. The input Google Form and internal registers are separate from that standardised document.
 

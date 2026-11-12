@@ -10,6 +10,8 @@ Deliverables: README, [requirements](requirements.md), [decision log](decisions.
 
 This is the first implementation milestone. Use synthetic claim data and two Google accounts representing different finance ICs.
 
+Progress on 12 November 2026: source template inspected, field ranges and capacities documented, and a blank full voucher exported and visually checked as one A4 page. User confirmed printed submission via PDF and Group = Congregation. See [template findings](voucher-template.md). Filling a disposable copy, conversion testing, and second-account setup are still outstanding.
+
 ### Official template check
 
 - Obtain the blank original and identify the header cells, claim-entry range, formulas, signatures, and print area.
@@ -17,6 +19,8 @@ This is the first implementation milestone. Use synthetic claim data and two Goo
 - Fill one synthetic claimant and receipt without changing the prescribed structure.
 - Compare the generated/exported result visually with the official original.
 - Establish the approved overflow behaviour before assuming rows may be inserted.
+- Verify that only the chosen payment voucher range is exported. A generic export of this workbook produced three Letter-size pages and split the full voucher's totals/signature area; explicitly scoped A4 export produced one intact full-voucher page.
+- Test long names, payment details, descriptions, all 30 full-voucher rows, and a claim exceeding capacity. Preserve the template's official labels and signature lines.
 
 ### Independent installation check
 
@@ -58,6 +62,7 @@ Acceptance scenarios:
 - Save resource IDs, settings, and software/template versions for that installation.
 - Make repeated or interrupted setup reuse its resources.
 - Display a setup summary and a test-submission check.
+- Provide an on-demand voucher PDF action with explicit sheet/range/paper settings and a saved submission revision.
 - Document ownership, authorisation, recovery, and handover.
 
 **Exit evidence:** a second person can install and submit a working test claim using only the guide and setup interface, without editing source code or file IDs.
