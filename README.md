@@ -21,6 +21,7 @@ Each event operates independently under its finance IC's Google account. Receipt
 - [Build roadmap](docs/roadmap.md): milestones and evidence needed before moving forward.
 - [Voucher template findings](docs/voucher-template.md): verified fields, dynamic claim rows, and A4 PDF export requirements.
 - [Prototype guide](docs/prototype.md): developer setup, synthetic voucher runs, test coverage, and remaining live checks.
+- [Manual live test](docs/manual-test.md): one-file setup, existing-project updates, and Drive API v2/v3 compatibility.
 
 ## What comes first
 
@@ -37,9 +38,12 @@ Use Node.js 20 or later. No dependency installation is needed for the local chec
 ```sh
 npm run check
 npm test
+npm run bundle
 ```
 
 `src/` is the Apps Script project. `test/` exercises the pure voucher planner, rendering adapter, PDF response handling, and copy/conversion runner using in-memory Google service substitutes. These tests do not establish native Google layout fidelity.
+
+The bundle command prepares a single Code.gs, appsscript.json, and quick-start guide under local/live-test. The bundled manifest uses Drive API v2; the importer supports either v2 or v3. Updating GitHub does not replace code already pasted into a Google project.
 
 Do not redesign the official output document. The input Google Form and internal registers are separate from that standardised document.
 

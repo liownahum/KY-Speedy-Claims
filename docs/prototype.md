@@ -15,7 +15,7 @@ Local automated checks pass using Google service substitutes. Live Drive convers
 | src/VoucherCore.js | Input validation, integer-cent totals, row/print planning, literal-text handling, synthetic data |
 | src/Voucher.gs | Template checks, row resizing, formatting, helper-list preservation, PDF response checks |
 | src/Prototype.gs | Manual synthetic run; creates a separate copy and saves a PDF |
-| src/appsscript.json | V8 runtime, Advanced Drive v3 service, and Google access scopes |
+| src/appsscript.json | V8 runtime, Advanced Drive v2 service, and Google access scopes; existing v3 configurations also work |
 
 The full-page layout is the only supported base in this prototype. Template checks reject a changed layout, occupied inputs, filled signatures, missing congregation options, and attempts to render into the source file itself.
 
@@ -23,12 +23,20 @@ The full-page layout is the only supported base in this prototype. Template chec
 
 1. Create a standalone project at [Google Apps Script](https://script.google.com/).
 2. Add the source from VoucherCore.js, Voucher.gs, and Prototype.gs as script files. The local CommonJS export guard in VoucherCore.js is inactive in Apps Script.
-3. Enable manifest visibility in Project Settings and use src/appsscript.json as the project's manifest. Confirm Advanced Drive API v3 is enabled under Services. A standard Cloud project may also require enabling Drive API in its Cloud console.
+3. Enable manifest visibility in Project Settings and use src/appsscript.json as the project's manifest. Confirm Drive API is enabled under Services with identifier Drive. The supplied manifest uses v2 to match the reported dropdown; the code also supports an existing v3 configuration. A standard Cloud project may also require enabling Drive API in its Cloud console.
 4. In Project Settings, configure the script properties below as needed. Leaving them unset uses the supplied template and creates a new prototype output folder.
 5. Run `runVoucherPrototype` and complete Google's authorisation flow under the intended developer/IC account. The function creates sample files only. Google access is not configured by merging this repository.
 6. Open the workbook and PDF links in the execution log, complete the visual checks below, and record the result.
 
 An optional clasp configuration example is included for developers who already use Google's clasp CLI. Copy .clasp.json.example to .clasp.json and supply your project ID; the actual local configuration and authentication files are ignored by Git. No particular clasp version or CLI installation is required for the editor-based workflow.
+
+For one-file setup, run `npm run bundle` to generate Code.gs, appsscript.json, and START-HERE.md under local/live-test (ignored by Git). Supply a destination with `npm run bundle -- /path/to/output`. The bundle combines the exact current source files and validates the combined script before writing it. See the [manual test guide](manual-test.md), including how to update an already-created Google project.
+
+### Drive API compatibility
+
+The initial live run reported only v2 in the service dropdown and failed at `Drive.Files.create`. That was a version mismatch: v3 exposes create, while v2 exposes insert and uses different title/parent metadata. The importer now detects the installed method before creating an output folder, uses v2 insert with `convert: true` when appropriate, and retains support for v3 create. It does not retry an upload failure through another version, which could duplicate files. Native Sheets sources continue to use DriveApp.makeCopy without requiring the Advanced Drive importer.
+
+Keep v2 if that is what the project offers; replacing the pasted Code.gs is sufficient for an existing v2 project. A missing/incompatible service fails with a setup message before output resources are created. The corrected import still needs a successful native Google run.
 
 ### Script properties
 
@@ -59,7 +67,7 @@ Each render starts from a fresh copy. Updating an already-rendered weekly docume
 
 Run `npm run check` and `npm test` with Node.js 20+. No npm dependencies are required. CI runs these commands on pushes and pull requests.
 
-Automated coverage includes 1, 2, 7, 8, 30, 31, and 75 claims; exact claim counts; footer movement; stable receipt IDs; cent totals; preserved congregation helpers; valid dates; literal formula-looking input; invalid/occupied templates; copy/conversion branches; unchanged source identity; and refusal to save HTTP failures or non-PDF responses as vouchers.
+Automated coverage includes 1, 2, 7, 8, 30, 31, and 75 claims; exact claim counts; footer movement; stable receipt IDs; cent totals; preserved congregation helpers; valid dates; literal formula-looking input; invalid/occupied templates; v2/v3 copy/conversion branches; setup checks before resource creation; no cross-version retry after an upload error; unchanged source identity; and refusal to save HTTP failures or non-PDF responses as vouchers.
 
 The in-memory adapter models row shifts across all columns, so tests exercise deletion of the original helper-list location as well as preservation of its separate copy. It is not a full implementation of Sheets formatting or formula recalculation. PDF response tests use synthetic bytes and do not create a rendered document.
 

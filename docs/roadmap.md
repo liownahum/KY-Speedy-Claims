@@ -14,6 +14,8 @@ Progress on 12 November 2026: source template inspected, original field ranges a
 
 Implementation started after PR #1 was merged on 12 November 2026. The [developer prototype](prototype.md) contains copy/conversion, input validation, helper-preserving row resizing, totals, formatting, and scoped PDF export. Local service-model checks pass; live Google authorisation, conversion, rendering, and print-review evidence remain outstanding. Milestone 1 is not yet complete.
 
+The first user-run live test found a Drive API mismatch: the project exposed v2, but the initial importer called the v3 create method. The compatibility fix supports both versions, checks setup before creating folders, and refreshes the one-file bundle. Conversion and filled-PDF verification await the user's rerun.
+
 ### Official template check
 
 - Obtain the blank original and identify the header cells, claim-entry range, formulas, signatures, and print area.

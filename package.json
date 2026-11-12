@@ -6,6 +6,7 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "check": "node scripts/check.js"
+    "check": "node scripts/check.js",
+    "bundle": "node scripts/build-live-test.js"
   }
 }

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const core = require('../src/VoucherCore.js');
 
-function environment({ native = false, count = null, unsupported = false, sameId = false, openError = false, renderError = false, exportError = false } = {}) {
+function environment({ native = false, count = null, unsupported = false, sameId = false, openError = false, renderError = false, exportError = false, driveVersion = 'v3', conversionError = false } = {}) {
   const calls = [];
   const logs = [];
   const properties = { PROTOTYPE_CLAIM_COUNT: count };
@@ -16,6 +16,21 @@ function environment({ native = false, count = null, unsupported = false, sameId
     getBlob: () => 'xlsx-blob',
     makeCopy(name, destination) { calls.push(['makeCopy', name, destination]); return { getId: () => sameId ? '1bV03-iPhOFeUaSI3ep75NaaCaXNzfeFH' : 'copy-id' }; }
   };
+  const files = {};
+  if (driveVersion === 'v3' || driveVersion === 'both') {
+    files.create = (metadata, blob, options) => {
+      calls.push(['convert', metadata, blob, options]);
+      if (conversionError) throw new Error('conversion failed');
+      return { id: 'converted-copy-id' };
+    };
+  }
+  if (driveVersion === 'v2' || driveVersion === 'both') {
+    files.insert = (metadata, blob, options) => {
+      calls.push(['insert', metadata, blob, options]);
+      if (conversionError) throw new Error('conversion failed');
+      return { id: 'converted-copy-id' };
+    };
+  }
   const context = vm.createContext({
     VoucherCore: core,
     PropertiesService: { getScriptProperties: () => ({ getProperty: key => properties[key] === undefined ? null : properties[key] }) },
@@ -25,10 +40,6 @@ function environment({ native = false, count = null, unsupported = false, sameId
       createFolder(name) { calls.push(['createFolder', name]); return folder; },
       getFolderById: () => folder
     },
-    Drive: { Files: { create(metadata, blob, options) {
-      calls.push(['convert', metadata, blob, options]);
-      return { id: 'converted-copy-id' };
-    } } },
     SpreadsheetApp: { openById(id) { calls.push(['open', id]); if (openError) throw new Error('open failed'); return workbook; } },
     VoucherRenderer: {
       render(target, payload, sourceId) {
@@ -44,6 +55,7 @@ function environment({ native = false, count = null, unsupported = false, sameId
     },
     console: { log: value => logs.push(value) }
   });
+  if (driveVersion !== 'missing') context.Drive = driveVersion === 'no-files' ? {} : { Files: files };
   vm.runInContext(fs.readFileSync('src/Prototype.gs', 'utf8'), context);
   return { run: () => context.runVoucherPrototype(), calls, logs, properties, folder };
 }
@@ -54,12 +66,60 @@ test('XLSX source is imported as a new native workbook, with its original blob u
   const conversion = app.calls.find(call => call[0] === 'convert');
   assert.equal(conversion[1].mimeType, 'application/vnd.google-apps.spreadsheet');
   assert.equal(conversion[1].parents[0], 'sample-folder');
+  assert.equal(conversion[1].title, undefined);
+  assert.equal(conversion[3].convert, undefined);
   assert.equal(conversion[2], 'xlsx-blob');
   assert.equal(app.calls.find(call => call[0] === 'open')[1], 'converted-copy-id');
   assert.equal(app.calls.find(call => call[0] === 'render')[3], '1bV03-iPhOFeUaSI3ep75NaaCaXNzfeFH');
   assert.equal(result.claimCount, 31);
   assert.equal(result.needsPrintReview, true);
   assert.equal(result.pdfUrl, 'pdf-url');
+});
+
+test('v2-only service converts XLSX with insert, title, parent objects, and explicit conversion', () => {
+  const app = environment({ count: '31', driveVersion: 'v2' });
+  const result = app.run();
+  const insertion = app.calls.find(call => call[0] === 'insert');
+  assert.ok(insertion);
+  assert.equal(insertion[1].title.startsWith('SAMPLE ONLY - 31 claims -'), true);
+  assert.equal(insertion[1].name, undefined);
+  assert.equal(insertion[1].mimeType, 'application/vnd.google-apps.spreadsheet');
+  assert.equal(insertion[1].parents[0].id, 'sample-folder');
+  assert.equal(insertion[2], 'xlsx-blob');
+  assert.equal(insertion[3].convert, true);
+  assert.equal(insertion[3].fields, 'id');
+  assert.equal(app.calls.some(call => call[0] === 'convert'), false);
+  assert.equal(app.calls.find(call => call[0] === 'open')[1], 'converted-copy-id');
+  assert.equal(result.claimCount, 31);
+  assert.equal(result.pdfUrl, 'pdf-url');
+});
+
+test('v3 is preferred when both methods are exposed', () => {
+  const app = environment({ driveVersion: 'both' });
+  app.run();
+  assert.equal(app.calls.filter(call => call[0] === 'convert').length, 1);
+  assert.equal(app.calls.some(call => call[0] === 'insert'), false);
+});
+
+test('a missing or incompatible Drive service fails before creating output resources', () => {
+  for (const driveVersion of ['missing', 'no-files', 'unsupported']) {
+    const app = environment({ driveVersion });
+    assert.throws(app.run, /Enable the Drive API service \(v2 or v3\)/);
+    assert.deepEqual(app.calls.map(call => call[0]), ['readSource']);
+  }
+});
+
+test('a failed upload is not retried through another API version', () => {
+  const app = environment({ driveVersion: 'both', conversionError: true });
+  assert.throws(app.run, /conversion failed/);
+  assert.equal(app.calls.filter(call => call[0] === 'convert').length, 1);
+  assert.equal(app.calls.some(call => call[0] === 'insert'), false);
+});
+
+test('native templates do not require the Advanced Drive service', () => {
+  const app = environment({ native: true, driveVersion: 'missing' });
+  assert.equal(app.run().claimCount, 1);
+  assert.equal(app.calls.filter(call => call[0] === 'makeCopy').length, 1);
 });
 
 test('native source uses makeCopy and never the original workbook for rendering', () => {
