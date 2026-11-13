@@ -1,8 +1,8 @@
 # Google Form pipeline: manual live test
 
-For the complete setup and operating instructions, use the [User Guide](UserGuide.md). This page is the focused pipeline test checklist; the [Developer Guide](DeveloperGuide.md) explains the implementation and wider acceptance cases.
+For finance ICs using the setup spreadsheet, follow the plain-language [User Guide](UserGuide.md). This page covers standalone Apps Script setup and its focused pipeline test checklist; the [Developer Guide](DeveloperGuide.md) explains configuration, implementation and wider acceptance cases.
 
-The user has reported successful multi-person submissions, folder handling, and receipt numbering after the earlier short/long voucher exports. The current-week batch PDF export below is a new change awaiting native validation. Upload ownership/access, recovery, concurrency, and independent installation still need their own evidence. Use fictional names/payment details and sample receipts. The guided Setup Workbook installer is a later milestone.
+The user has reported successful multi-person submissions, folder handling, and receipt numbering after the earlier short/long voucher exports. Native testing on 13 November 2026 verified the single-account pipeline, one-claimant PDF batch path, own-account folder relocation, and recovery from a controlled render failure; a separate copied setup workbook also passed the single-account workflow. See [live validation](live-validation.md). Multi-person batch export, cross-account ownership/access, other recovery boundaries, concurrency, and independent second-IC installation still need their own evidence. Use fictional names/payment details and sample receipts. The [guided Setup Workbook](setup-workbook.md) is available as a preview.
 
 ## 1. Update the Apps Script project
 

@@ -43,7 +43,7 @@ Do not treat a programmatically submitted FormResponse as proof of trigger behav
 
 Build configuration, registers, claimant lookup, global-within-event numbering, receipt routing, weekly document creation, and claim-row insertion.
 
-Current implementation: a standalone test setup creates the event resources; the owner manually adds one receipt-upload question, then activates the form trigger. Processing uses collected email, submission weeks in Singapore time, persisted per-event numbers, original upload file IDs, and staged voucher replacement in a stable weekly workbook. Manual retry and PDF export for all current-week claimants are included. The user reported successful multi-person submissions, folder handling, and receipt numbering. See the [pipeline live-test guide](form-pipeline-test.md). Native batch PDF validation, upload ownership/access, recovery, concurrency, and second-account installation remain pending.
+Current implementation: a standalone test setup creates the event resources; the owner manually adds one receipt-upload question, then activates the form trigger. Processing uses collected email, submission weeks in Singapore time, persisted per-event numbers, original upload file IDs, and staged voucher replacement in a stable weekly workbook. Manual retry and PDF export for all current-week claimants are included. The user reported successful multi-person submissions, folder handling, and receipt numbering. Native testing on 13 November 2026 verified single-account processing, one-claimant PDF exports, completed retries, setup/trigger reuse, own-account folder relocation, and a controlled render-failure recovery. See the [validation record](live-validation.md) and [pipeline live-test guide](form-pipeline-test.md). Multi-person batch export, cross-account access, other recovery boundaries, concurrency, and second-account installation remain pending.
 
 Acceptance scenarios:
 
@@ -66,9 +66,11 @@ Acceptance scenarios:
 
 ## Milestone 3: Package guided setup
 
+Implementation on 13 November 2026: a bound-workbook preview now provides event inputs, form-setting acknowledgements, preparation/activation/status menus, retry/export results, and safeguards against inherited event IDs in a copy. All 150 local tests pass. A copy of the private blank native template passed preparation, activation, a browser claim, status, empty retry, and PDF export using one account. The template stayed blank. This is not a public distribution or a second-IC installation pass. See the [guided setup guide](setup-workbook.md).
+
 - Provide event inputs in the Setup Workbook.
 - Create/configure the event folder, template copy, registers, response destination, form, and triggers.
-- Let the IC select an existing normal Drive event folder as the parent location. The Script Property version is implemented; native creation/relocation checks and a guided folder selector remain to be validated/built.
+- Let the IC enter an existing normal Drive event-folder link as the parent location. Both initial guided preparation with an own-account parent and existing-root relocation were exercised natively. Shared-folder access and a visual folder picker remain to be validated/built.
 - Save resource IDs, settings, and software/template versions for that installation.
 - Make repeated or interrupted setup reuse its resources.
 - Display a setup summary and a test-submission check.

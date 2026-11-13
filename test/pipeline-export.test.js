@@ -54,7 +54,7 @@ function environment(initial, instant = '2026-11-12T04:00:00Z') {
     Date: class extends Date {
       constructor(...args) { super(...(args.length ? args : [instant])); }
     },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: () => JSON.stringify(config) }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: key => key === 'KY_CLAIM_PIPELINE' ? JSON.stringify(config) : null }) },
     LockService: { getScriptLock: () => ({
       waitLock() { assert.equal(locked, false); locked = true; calls.push('lock'); },
       releaseLock() { assert.equal(locked, true); locked = false; calls.push('unlock'); }

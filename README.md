@@ -2,11 +2,11 @@
 
 KY Speedy Claims helps an event's finance IC collect receipt submissions, organise them in Google Drive, and prepare each claimant's weekly claim document using the finance department's standard template.
 
-**Status:** on 12 November 2026, the user confirmed successful one-line and long voucher exports and reported working multi-person submissions, folder handling, and receipt numbering. The pipeline includes setup, weekly workbooks, and retries. Batch PDF export for every current-week claimant is now implemented and awaiting native validation. Upload ownership/access, recovery, concurrency, guided setup, second-account installation, and the documentation website remain further work.
+**Status:** on 13 November 2026, browser-assisted native testing verified single-account setup, actual form-trigger processing, numbered receipt routing, weekly workbook reuse, PDF snapshots, existing-folder relocation, and recovery from a controlled render failure. A separate copied Setup Workbook also passed preparation, activation, a browser submission, status, empty retry, and PDF export through its Sheets menu. Earlier short/long voucher exports and basic multi-person submissions were user-reported. Multi-person batch export, wider recovery/access checks, concurrency, independent second-account installation, and the documentation website remain further work. See the [validation record](docs/live-validation.md) for tested builds and exact scope.
 
 ## Intended experience
 
-The guided Setup Workbook in this planned experience is not available yet. Use the [User Guide](docs/UserGuide.md) for the current Apps Script setup and operation.
+A [guided Setup Workbook preview](docs/setup-workbook.md) now implements this setup/menu interface. Its copied-workbook workflow passed native testing under one account; an independent finance IC's installation remains to be tested. A maintainer installs its bound script once in a blank template; finance ICs then use their own copies. Follow the [User Guide](docs/UserGuide.md) for the workbook workflow, or the [standalone test guide](docs/form-pipeline-test.md) for an existing script-based installation.
 
 1. A finance IC copies the setup workbook, enters event settings, and authorises setup.
 2. Setup prepares the event's folders, submission form, registers, template copy, and automatic processing.
@@ -19,6 +19,7 @@ Each event operates independently under its finance IC's Google account. Receipt
 ## Project documentation
 
 - [User Guide](docs/UserGuide.md): setup, event folders, claimant submissions, weekly PDFs, retries, and troubleshooting.
+- [Guided setup workbook](docs/setup-workbook.md): copy-based onboarding, finance menu actions, copy isolation, and maintainer packaging.
 - [Developer Guide](docs/DeveloperGuide.md): architecture, data/state contracts, feature implementation, design choices, tests, requirements, and manual acceptance cases.
 - [Requirements](docs/requirements.md): agreed behaviour and proposed details.
 - [Decision log](docs/decisions.md): confirmed choices and unresolved questions.
@@ -36,7 +37,7 @@ The official template has been supplied and inspected. Finance requires a printe
 
 Each weekly voucher must have exactly one input row per included claim. Delete unused input rows and add rows when needed, preserving the official headings, styling, totals, and signature sections. The original template's row counts are starting layouts, not claim limits.
 
-The copy/fill/resize/export path has passed the user's short/long live tests, and basic multi-person submissions, folders, and numbering have been reported working. The newer current-week batch PDF and parent-folder placement/relocation features still need native validation. Claims use submission weeks, Monday–Sunday in Singapore time. Upload ownership/access, failure recovery, concurrency, and independent second-account setup must also be proved before accepting the guided installer.
+The copy/fill/resize/export path has passed the user's short/long live tests, and basic multi-person submissions, folders, and numbering have been reported working. Native testing now also covers the single-claimant PDF batch path and relocation into an own-account normal Drive folder. Claims use submission weeks, Monday–Sunday in Singapore time. Multi-person exports, shared-folder access, additional recovery cases, concurrency, and independent second-account setup must still be proved before accepting the guided installer.
 
 ## Local development
 
@@ -53,6 +54,8 @@ npm run bundle
 The bundle command prepares a single Code.gs, appsscript.json, and quick-start guide under local/live-test. The bundled manifest uses Drive API v2; the importer supports either v2 or v3. Updating GitHub does not replace code already pasted into a Google project.
 
 For the new submission test, use `npm run bundle -- /absolute/path/to/form-test --pipeline` to include the form-testing guide. Replace both the script and manifest; the pipeline requires Forms and trigger-management permissions too.
+
+Use `npm run bundle -- --installer` for the setup-workbook bundle and its maintainer guide. It creates ignored `local/setup-workbook/`; no web-app deployment or new service scope is required.
 
 The form defaults Congregation to Youth without asking the claimant. Set Script Property `PIPELINE_ASK_CONGREGATION` to `true` and rerun `setupClaimPipeline` to show the dropdown; remove the property or set it to `false` and rerun setup to return to Youth automatically. This setting can also be applied to an active form. See the [form guide](docs/form-pipeline-test.md#changing-the-congregation-setting).
 

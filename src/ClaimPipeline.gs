@@ -7,9 +7,18 @@ function claimLock_(callback) {
   try { return callback(); } finally { lock.releaseLock(); }
 }
 function claimConfig_(required) {
-  var raw = PropertiesService.getScriptProperties().getProperty('KY_CLAIM_PIPELINE');
+  var properties = PropertiesService.getScriptProperties();
+  var raw = properties.getProperty('KY_CLAIM_PIPELINE');
+  var boundScript = properties.getProperty('KY_SETUP_SCRIPT_ID');
+  if (boundScript && boundScript !== ScriptApp.getScriptId()) {
+    throw new Error('This is a copied setup workbook. Choose KY Claims > Start / open setup before using this copy.');
+  }
   if (!raw && required) throw new Error('Run setupClaimPipeline first.');
-  return raw ? JSON.parse(raw) : null;
+  var config = raw ? JSON.parse(raw) : null;
+  if (config && config.installationScriptId && config.installationScriptId !== ScriptApp.getScriptId()) {
+    throw new Error('This event belongs to another script project. Initialise a new event in your copied setup workbook.');
+  }
+  return config;
 }
 function saveClaimConfig_(config) {
   PropertiesService.getScriptProperties().setProperty('KY_CLAIM_PIPELINE', JSON.stringify(config));
@@ -109,7 +118,10 @@ function claimStatus_(config) {
   return status;
 }
 function setupClaimPipeline() {
-  return claimLock_(function () {
+  return claimLock_(setupClaimPipeline_);
+}
+/** Internal entry point for the guided installer, which already holds the lock. */
+function setupClaimPipeline_() {
     var properties = PropertiesService.getScriptProperties();
     var code = (properties.getProperty('PIPELINE_EVENT_CODE') || 'TEST').trim().toUpperCase();
     var title = (properties.getProperty('PIPELINE_EVENT_TITLE') || 'KY Claims Test').trim();
@@ -185,10 +197,12 @@ function setupClaimPipeline() {
     if (destinationId && destinationId !== config.registerId) throw new Error('Form response destination was changed; review before continuing.');
     if (!destinationId) form.setDestination(FormApp.DestinationType.SPREADSHEET, config.registerId);
     return claimStatus_(config);
-  });
 }
 function activateClaimPipeline() {
-  return claimLock_(function () {
+  return claimLock_(activateClaimPipeline_);
+}
+/** Internal entry point; caller must hold claimLock_. */
+function activateClaimPipeline_() {
     var config = claimConfig_(true);
     var form = FormApp.openById(config.formId);
     var uploads = form.getItems().filter(function (item) { return item.getType().toString() === 'FILE_UPLOAD'; });
@@ -207,7 +221,6 @@ function activateClaimPipeline() {
     form.setAcceptingResponses(true);
     config.active = true; saveClaimConfig_(config);
     return claimStatus_(config);
-  });
 }
 function claimInput_(response, config) {
   var answers = {};

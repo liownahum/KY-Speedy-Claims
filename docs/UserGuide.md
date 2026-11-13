@@ -1,289 +1,259 @@
 # KY Speedy Claims User Guide
 
-KY Speedy Claims collects event expenses through a Google Form, numbers and files receipts, and prepares a weekly payment voucher for each claimant. This guide explains how a finance IC sets up an event, how claimants submit expenses, and how the IC checks and exports the results.
+KY Speedy Claims helps the person in charge of an event's finances collect expense claims. Claimants fill in a Google Form and upload a receipt. The system files the receipt and adds the expense to that person's weekly payment voucher.
 
-The current version is operated through Google Apps Script. A guided Setup Workbook is planned but is not available yet. Claimants only need the submission form; they do not install the script.
+**Finance ICs use a setup spreadsheet. Claimants only need the form link.** You do not need to write code to use a prepared setup spreadsheet.
 
-## Contents
+This version is a preview. Start with made-up details and sample receipts. A copied setup spreadsheet has been tested using one Google account; setup by a second finance IC using a different account still needs testing.
 
-- [Before you start](#before-you-start)
-- [Set up an event](#set-up-an-event)
-- [Choose the event folder](#choose-the-event-folder)
-- [Choose whether to ask for congregation](#choose-whether-to-ask-for-congregation)
-- [Submit an expense](#submit-an-expense)
-- [Find claims and receipts](#find-claims-and-receipts)
-- [Create the weekly PDFs](#create-the-weekly-pdfs)
-- [Retry incomplete submissions](#retry-incomplete-submissions)
-- [Update an existing installation](#update-an-existing-installation)
-- [Troubleshooting](#troubleshooting)
-- [Function reference](#function-reference)
-- [Current limits](#current-limits)
+## Find what you need
+
+| I want to… | Go to |
+| --- | --- |
+| Start an event as the finance IC | [Set up an event](#set-up-an-event) |
+| Claim an expense | [Submit an expense](#submit-an-expense) |
+| Check whether a claim was processed | [Check claims and find receipts](#check-claims-and-find-receipts) |
+| Prepare vouchers for printing | [Create the weekly PDFs](#create-the-weekly-pdfs) |
+| Deal with an incomplete claim | [Retry incomplete submissions](#retry-incomplete-submissions) |
+| Fix a problem | [Troubleshooting](#troubleshooting) |
 
 ## Before you start
 
-You will need:
+If you are the finance IC, have these ready:
 
-- The Google account that will operate the event. Use this same account for setup, activation, and routine finance actions.
-- A current KY Speedy Claims bundle containing `Code.gs` and `appsscript.json`, supplied by the maintainer.
-- Access to the approved blank payment-voucher template. The supplied template is the default; ask the maintainer if your account cannot open it.
-- An event code, for example `CAMP26`, and an event title, for example `Youth Camp 2026`.
-- Optionally, an existing event folder in Google Drive, with permission to add files and folders there.
-- Fictional claimant details and sample receipts for the first test.
+- The Google account you will use to manage the event. Keep using that account for setup and finance tasks.
+- The **blank KY Speedy Claims setup template**, supplied by the person who maintains the system. This guide calls that person your **technical helper**.
+- A short event code, such as **CAMP26**, and an event name, such as **Youth Camp 2026**. Use a different code for each event.
+- Optionally, a Google Drive folder where you want to keep the event's claims. You must be able to add files and folders there.
+- A sample receipt and made-up name and payment details for testing.
 
-Use a separate Apps Script project for each event. Event codes must be distinct wherever expense records will be combined.
+Use Google Sheets on a computer for setup. Make a separate copy of the blank template for each event.
 
-Claim files contain payment information. Choose the event folder's audience accordingly: files inside a shared folder can inherit its permissions. A normal Drive folder shared with you is supported. A Google Workspace **Shared Drive** is not supported for this installation because its form contains a file-upload question. See [Google's folder-sharing guidance](https://support.google.com/drive/answer/7166529?co=GENIE.Platform%3DDesktop&hl=en) and [file-upload restrictions](https://support.google.com/docs/answer/7322334?hl=en).
+Claims contain personal and payment information. Keep the setup spreadsheet, register and claims folders accessible only to the intended finance team. If you choose an existing shared folder, people who can open that folder may also be able to open the claims inside it. A normal Drive folder can be used; a Google Workspace **Shared Drive** cannot be used in this version.
 
 ## Set up an event
 
-### 1. Install the supplied script
+### 1. Make your own copy
 
-1. Open [Google Apps Script](https://script.google.com/) using the event's operating account.
-2. Create a new standalone project and give it an event-specific name, such as `KY Claims - CAMP26`.
-3. Open `Code.gs`, replace its contents with the complete supplied `Code.gs`, and save. Do not add another copy of the same program in a second script file.
-4. Open **Project Settings** and enable **Show appsscript.json manifest file in editor**.
-5. Return to the editor, open `appsscript.json`, replace it with the supplied manifest, and save.
-6. Check **Services** for **Drive API**, with the identifier **Drive**. The supplied manifest uses Drive API v2. Keep that version if it is already installed; you do not need to find v3. If the service is missing, add Drive API. A separately managed Google Cloud project may also need its Drive API enabled by its administrator.
+1. Open the blank setup template supplied by your technical helper.
+2. In Google Sheets, choose **File → Make a copy**.
+3. Give the copy a clear name, such as **Claims — Youth Camp 2026**.
+4. Open your copy and choose **KY Claims → Start / open setup** from the menu at the top.
+5. Complete Google's permission review using the event's Google account. If you are unsure about the project or requested access, check with your technical helper before continuing.
 
-You do not need to publish a web app or use the **Deploy** button for this workflow.
+The system needs permission to create the event's form, organise receipts, update spreadsheets and create PDFs. If Google asks you to run the menu action again after granting permission, choose **Start / open setup** again.
 
-### 2. Enter the event settings
+You should now see a tab named **KY Setup** at the bottom. If the **KY Claims** menu is missing, reload the spreadsheet. If it is still missing, ask your technical helper to check that you have the prepared template.
 
-In **Project Settings → Script Properties**, add the settings you need and save them before running setup.
+### 2. Fill in the blue cells
 
-| Property | What to enter | If left unset |
+In **KY Setup**, enter:
+
+| Setting | What to do | Example |
 | --- | --- | --- |
-| `PIPELINE_EVENT_CODE` | A short code such as `CAMP26`. Use up to 40 letters, digits, underscores, or hyphens, starting with a letter or digit. Letters are converted to uppercase. | `TEST` |
-| `PIPELINE_EVENT_TITLE` | The event name, up to 150 characters. This appears in claim descriptions. | `KY Claims Test` |
-| `PIPELINE_PARENT_FOLDER_ID` | The existing event folder's full Drive folder link or folder ID. | A new claims folder in My Drive. |
-| `PIPELINE_ASK_CONGREGATION` | `true` to show a required Congregation dropdown; `false` to use Youth automatically. | Youth automatically, with no question. |
-| `PIPELINE_TEMPLATE_ID` | Optional: the Drive file ID of an approved, blank template matching the supported layout. This setting takes an ID, not a full link. | The supplied master, or `PROTOTYPE_TEMPLATE_ID` if that older setting exists in this project. |
+| Event code | Enter a short code with no spaces. Use letters, numbers, hyphens or underscores; start with a letter or number. | CAMP26 |
+| Event title | Enter the event's name. This is added to descriptions on the voucher. | Youth Camp 2026 |
+| Event folder link (optional) | Open the event's folder in Drive, copy its address from your browser, and paste it here. Leave this blank to create the claims folder in My Drive. | Your event planning folder's link |
+| Ask for congregation? | Tick to let claimants choose their congregation. Leave unticked to use **Youth** for every claim. | Unticked for a Youth-only event |
 
-For example, set the event code to `CAMP26`, title to `Youth Camp 2026`, paste the planning folder's link into `PIPELINE_PARENT_FOLDER_ID`, and leave the congregation property absent for a Youth-only event.
+Check the event code and title carefully. **They cannot be changed after you prepare the event.** For another event, make another copy of the blank template.
 
-Do not change the event code or title after setup. For another event, create another project. Do not edit or delete the program's internal `KY_CLAIM_PIPELINE` and `KY_CLAIM_RETRY_CURSOR` properties.
+### 3. Prepare the event
 
-### 3. Create the event resources
+Choose **KY Claims → 1. Prepare event / apply settings**.
 
-1. Return to the editor.
-2. In the function selector beside **Run**, select **setupClaimPipeline**.
-3. Click **Run**. Review and complete Google's authorisation prompts for your event's project. The program needs Drive, Sheets, Forms, trigger-management, and PDF-export access.
-4. Open the **Execution log** after the run finishes.
+Wait for the action to finish. In KY Setup, look below your settings for **Stage**, **Next step / last error**, and **EVENT LINKS**. The system creates the form, claims register and claims folder for you.
 
-Successful setup reports a stage of `ADD_RECEIPT_UPLOAD_THEN_ACTIVATE` and these links:
+If a problem appears, keep using this same copy. Follow the message or ask your technical helper, then run Prepare again. Do not delete the files or make a replacement event to get around an error.
 
-| Log field | Use |
+### 4. Check the form
+
+Open the **Form editor** link under EVENT LINKS. Two checks need your attention before the form can accept claims.
+
+First, add one receipt question in Google Forms:
+
+| Setting | Choose |
 | --- | --- |
-| `formEditUrl` | Open the form editor to add the receipt-upload question. |
-| `formSubmitUrl` | The link claimants will use after activation. |
-| `registerUrl` | Open the finance register to check processing results. |
-| `folderUrl` | Open the claims folder containing the event's finance resources. |
-| `parentFolderUrl` | Open the chosen event/planning folder, if one was configured. |
-
-The unfinished form stays closed. Setup creates a separate template copy and never fills the original master. If setup is interrupted, keep the project and its saved settings, fix the reported problem, and run setup again. Do not start over by deleting its files.
-
-### 4. Add the receipt-upload question
-
-Open `formEditUrl` and add exactly one question with these settings:
-
-| Setting | Value |
-| --- | --- |
-| Question title | `Receipt` |
+| Question title | **Receipt** |
 | Question type | **File upload** |
-| Required | On |
+| Required | **On** |
 | Maximum number of files | **1** |
 | Allowed file types | **Image** and **PDF** |
-| Maximum file size | Choose a suitable limit, such as 10 MB. |
+| Maximum file size | A suitable limit, such as **10 MB** |
 
-Google's form service does not create this upload question for the program. The activation check finds the upload question, but you must check its Required, file-count, type, and size settings yourself.
+There must be exactly one file-upload question. Google requires this question to be added in the form editor.
 
-In the form's **Settings → Responses**, check email collection and choose **Verified** so it collects the signed-in account's address. Keep **Limit to 1 response** off: a claimant needs a separate submission for each receipt. No additional email question is needed. Check that responder access permits the intended claimants, including external accounts if required.
+Next, open the form's **Settings → Responses**:
+
+- Set **Collect email addresses** to **Verified**. This identifies the claimant by their signed-in Google account.
+- Leave **Limit to 1 response** switched **off**, so a person can submit more than one receipt.
+- Check that the people you expect to claim can open and submit the form. Organisation restrictions may prevent people outside your organisation from responding.
+
+Return to KY Setup. Tick **I checked the receipt question** and **I checked responder settings** only after you have checked both. These boxes record your checks; the system cannot check every Google Forms setting for you.
 
 ### 5. Activate the form
 
-1. Return to Apps Script.
-2. Select **activateClaimPipeline** and click **Run**.
-3. Check that the log reports `stage: ACTIVE`.
+Choose **KY Claims → 2. Activate form**.
 
-Activation opens the form and installs its submission trigger. Repeating activation reuses that trigger. Do not manually run `onClaimFormSubmit`; it is called when someone submits the actual form in a browser.
+The Stage should change to **Accepting submissions**. If it does not, read **Next step / last error**.
 
-### 6. Check the first submissions
+### 6. Try two sample receipts
 
-Use the real `formSubmitUrl` in a browser. Submit fictional name/payment details, a sample receipt, and an amount of `12.50`. Submit another receipt using the same account and exactly the same name/payment details, with an amount of `7.25`.
+Before inviting claimants, test the **Claimant form** link under EVENT LINKS. Use made-up details and sample receipt files.
 
-In a fresh event, expect:
+1. Submit a sample expense for **12.50**.
+2. Submit another for **7.25**, using the same Google account and exactly the same name and payment details.
+3. Back in your setup spreadsheet, choose **KY Claims → Refresh status**.
+4. Open **Claims register**, then its **Claims** tab. Both entries should show **DONE**.
+5. Open the weekly spreadsheet linked from either entry. It should contain two claim rows with a total of **19.75**.
+6. Try [creating the weekly PDFs](#create-the-weekly-pdfs) and check the result.
 
-- Receipt numbers 1 and 2 across the event.
-- Both processed Claims rows marked `DONE`.
-- One claimant folder and one Receipts subfolder.
-- One weekly workbook containing exactly two expense rows and a total of **19.75**.
-- Receipt files named with their assigned numbers and extensions, such as `1.jpg` and `2.pdf`.
+In a brand-new event, these should be receipts **1** and **2**. If you already submitted a test, the next numbers will be used. Do not delete records to restart numbering. Keep preview testing in a separate event from real claims.
 
-Another claimant should receive the next event-wide number and a separate claimant folder. If this event already has claims, expect the next unused numbers rather than starting again at 1.
+### 7. Give claimants the correct link
 
-Only share `formSubmitUrl` with claimants. The form editor, register, and claims folder are finance resources; they are not automatically made available to every claimant.
+The **Claimant form** link is the link people use to submit expenses. The **Form editor** link is for finance to change form settings.
 
-## Choose the event folder
-
-Set `PIPELINE_PARENT_FOLDER_ID` to an existing normal Drive folder's link or ID and rerun **setupClaimPipeline**. The program places its claims folder inside that event folder, alongside the planning documents.
-
-```text
-Event planning folder
-├── Planning documents
-└── KY Claims Test - CAMP26 - <event suffix>
-    ├── Claims Register
-    ├── Submission form
-    ├── Pristine voucher template
-    ├── Claimant A
-    │   ├── Receipts
-    │   ├── Weekly workbook
-    │   └── Exported PDF snapshots
-    └── Claimant B
-        ├── Receipts
-        ├── Weekly workbook
-        └── Exported PDF snapshots
-```
-
-The diagram shows the program's organised finance resources. Google also manages the form's initial upload-storage folder before processing moves individual receipts into claimant folders.
-
-For an existing installation, setup moves the **same claims folder and its contents**. It preserves file IDs, links, receipt numbers, and processing records; the active form remains open. Other planning documents stay where they are. Check `parentFolderUrl` and `folderUrl` afterward.
-
-If the destination is invalid, read-only, inaccessible, or in the trash, setup stops. It does not silently create a substitute in My Drive. Fix access and rerun setup in the same project.
-
-Removing the property later leaves the existing claims folder in its current location. To move it elsewhere, set a different event folder and rerun setup. Do not select the claims folder itself or one of its children as its parent.
-
-## Choose whether to ask for congregation
-
-| `PIPELINE_ASK_CONGREGATION` | Applied behaviour |
-| --- | --- |
-| `true` | One required Congregation dropdown, using the voucher template's options. |
-| `false`, blank, `null`, or missing | No Congregation question; Youth is entered automatically in the register and voucher. |
-
-After editing the property, run **setupClaimPipeline** again. Running **activateClaimPipeline** also applies this setting. Case and surrounding spaces in `true` are ignored. `showClaimPipelineStatus` reports `askCongregation` and `defaultCongregation` for the setting that has been applied.
-
-Review outstanding submissions before changing modes: responses not yet recorded as claims are interpreted using the applied form settings. Claims already saved retain their congregation when retried. Youth must be an allowed option in the template before the question can be disabled. The official voucher's Congregation column remains in both modes.
+Share the claimant link only after activation and a successful sample submission. Before collecting real claims, ask your finance lead and technical helper to confirm that this preview meets the event's needs. The remaining limits are listed [below](#current-limits).
 
 ## Submit an expense
 
-Claimants open the event's submission link and sign in to Google. Submit one receipt per response.
+This section is for anyone claiming an expense.
 
-| Field | What to enter |
+1. Open the event's claim form link from your finance IC.
+2. Sign in to the Google account you will use for this event's claims.
+3. Fill in the details below, attach one receipt, and submit.
+4. For another receipt, submit the form again.
+
+| Form field | What to enter |
 | --- | --- |
-| Collected email | Confirm the intended signed-in account. This address identifies the claimant. |
-| Full name (as per NRIC) | The name to appear on the payment voucher. Enter the name only, not an NRIC number. |
-| Bank A/c/PayNow | The payment details requested by the finance IC. |
-| Purchase date | A calendar date in `YYYY-MM-DD`, for example `2026-10-01`. |
-| Item description | What was purchased. The event title is added to the voucher description automatically. |
-| Amount | A positive amount such as `12.50`. Use at most two decimal places, with no currency symbol or thousands separator. |
-| Congregation | Choose an option if the question is shown. Otherwise Youth is assigned automatically. |
-| Receipt | One image or PDF, within the form's configured limits. |
+| Full name (as per NRIC) | Your name as it should appear on the voucher. **Do not enter your NRIC number.** |
+| Bank A/c/PayNow | The payment details requested by your finance IC. |
+| Purchase date (YYYY-MM-DD) | The date on the receipt. For example, 4 October 2026 is **2026-10-04**. |
+| Item description | A short, clear description, such as **Stationery for camp games**. The event name is added automatically. |
+| Amount (up to 2 decimal places) | A positive amount such as **12.50**. Do not add a currency symbol or commas. |
+| Congregation | Choose your congregation if the question appears. If it does not appear, **Youth** is used automatically. |
+| Receipt | One image or PDF within the size limit shown on the form. |
 
-Use the same account and exactly the same name/payment details for further claims in the same week. Different accounts are treated as different claimants, even if their names match. Agree the event's currency with finance; the program does not convert currencies.
+The form also collects your signed-in email address. Use the **same Google account and exactly the same name and payment details** for claims in the same week. Different accounts are treated as different people, even if the names match. Check the event's currency with finance; the system does not convert currencies.
 
-A form confirmation means the response was received. Finance must check that processing reaches `DONE`. Do not resubmit an expense just because processing is delayed: another response can receive another receipt number.
+The confirmation page means your response was received. It does **not** mean the claim has been checked, approved or paid. If you made a mistake or are unsure whether it was processed, contact your finance IC. **Do not submit the same expense again just because processing seems slow.**
 
-## Find claims and receipts
+## Check claims and find receipts
 
-Open `registerUrl` and select the **Claims** tab. It shows the receipt number/reference, submission time, week, claimant, description, congregation, amount, status, receipt link, weekly workbook link, and last error.
+This section and the remaining sections are for the finance IC.
 
-| Status | Meaning | Finance action |
+Open your setup spreadsheet and choose **KY Claims → Refresh status**. KY Setup shows the number of completed and incomplete claims. For individual details, open **Claims register → Claims**.
+
+| Status in Claims | What it means | What to do |
 | --- | --- | --- |
-| `PENDING` | A receipt number has been reserved; processing has not completed. | Check the relevant Apps Script execution and retry after resolving any interruption. |
-| `ERROR` | Processing stopped after reservation. Some files or workbook changes may already exist. | Read **Last error**, resolve its cause, then retry the original response. |
-| `DONE` | Receipt filing and weekly voucher rendering completed. | Review the claim and prepare the PDF when needed. This is not an approval or payment status. |
+| **DONE** | The receipt has been filed and the weekly voucher updated. | Check the details. DONE does not mean approved or paid. |
+| **PENDING** | Processing has started but has not finished. | Check again after processing finishes. If it stays pending, ask your technical helper before retrying. |
+| **ERROR** | Processing stopped because something needs attention. | Read **Last error**. Fix the cause or ask your technical helper, then [retry](#retry-incomplete-submissions). |
 
-The form's raw response tab is separate from **Claims**. Invalid input can fail before a Claims row is created, so check the raw response and Apps Script **Executions** when a submission is missing from Claims.
+Use each claim's receipt link to open the filed receipt, or its weekly spreadsheet link to open that person's voucher. You can also open **Claims folder** from KY Setup and find the person's folder. It contains their **Receipts** folder, weekly spreadsheets and exported PDFs.
 
-Receipt numbering is shared across everyone in one event. It does not restart per person or week. For example, one person's voucher can contain receipts 1 and 3 while another person's contains receipt 2. `CAMP26-000001` is the cross-event reference for receipt 1 in CAMP26.
+If a response is missing from Claims, it may have been received but rejected before a claim record was created. Check the form's **Responses** tab and ask your technical helper to investigate. The counts in KY Setup cannot show responses that have no claim record yet.
+
+### Receipt numbers
+
+Receipt numbers run across **everyone in the event**. They do not restart for each person or week. For example, one person's voucher may contain receipts 1 and 3, while another person's contains receipt 2. The filed receipt is named with its number, such as **1.png** or **2.pdf**.
+
+An event reference such as **CAMP26-000001** means receipt 1 for event CAMP26.
 
 ### How weeks work
 
-Weeks use the **submission timestamp**, Monday–Sunday in **Asia/Singapore**, rather than the purchase date. A response submitted on 12 November 2026 belongs to the week starting `2026-11-09`, even if its purchase date is in October.
+A week runs from **Monday to Sunday, using Singapore time**. The week is based on **when the form was submitted**, rather than when the item was purchased.
 
-The same person/week reuses one workbook. A new submission week creates another workbook in the same claimant folder. The voucher Date currently displays the week-start date; confirm the final production date policy with finance before official use.
+For example, a claim submitted on 12 November 2026 belongs to the week starting **9 November 2026**, even if the purchase was in October. Each person has one voucher spreadsheet per submission week. More claims in that week update the same spreadsheet.
 
-Do not edit/delete Claims rows, the State JSON column, People/Weeks tabs, or saved internal Script Properties. They hold the receipt sequence and recovery state. Edits to the generated voucher worksheet can be replaced by the next processed claim. Unrelated worksheets can be retained, but generated helper tabs are reserved for the program.
+The voucher's Date currently shows the Monday of that week. Finance still needs to confirm the date to use for official submissions.
+
+### Keep the records intact
+
+Use the generated vouchers for review. Edits you make directly to a voucher can be replaced when the next claim arrives. Do not delete or change claim records, numbered receipts, hidden information or system-created tabs to fix an error. Ask your technical helper about corrections.
 
 ## Create the weekly PDFs
 
-1. Check the current week's Claims rows and resolve incomplete processing.
-2. In Apps Script, select **exportWeeklyClaimVouchers** and click **Run**.
-3. Read each person's result and the final summary in the execution log.
-4. Open the PDFs from their links or claimant folders, check every page, and print the accepted copies.
+A PDF is the printable copy of a voucher. Create PDFs when you are ready to prepare the week's finance submission.
 
-The function exports the **current Singapore submission week** for every person with claims in that week. Each PDF is saved in that person's folder. A person with no claims this week receives no new PDF; the program does not substitute their latest older week. If nobody has current-week claims, it creates no PDFs.
+1. Open **Claims register → Claims** and check the current week's entries. Resolve incomplete claims before printing.
+2. In your setup spreadsheet, choose **KY Claims → Export current-week PDFs**.
+3. Open the **KY Results** tab. Check the exported, failed and skipped counts, then each person's result.
+4. Open each **PDF** link. Check the claimant and payment details, receipt numbers, descriptions, congregation, amounts and total. Check every page, including the signature areas.
+5. Print the checked PDFs for the finance submission.
 
-The summary contains `week`, `peopleWithClaims`, `exported`, `skipped`, `failed`, and `results`. Each successful result contains the PDF/workbook links, claim count, and total in cents. For example, `1975` cents is an amount of `19.75`.
+The action creates a PDF for **each person with claims in the current Singapore week**, and saves it in that person's folder. People with no claims that week receive no new PDF. You cannot choose an earlier week from this menu yet.
 
-If one person's export fails, the program reports that person as `ERROR` and continues with the others. A person with incomplete claims is blocked from PDF export so an expense is not silently omitted. Resolve their processing errors before running export again. Missing or inconsistent workbook metadata requires maintainer review.
+If someone's claims are incomplete, their PDF is blocked so an expense is not left out. Other people's exports can still succeed. Read that person's error, resolve it and run the action again. If you are unsure how to fix it, ask your technical helper.
 
-Each run saves a separate PDF snapshot; earlier PDFs are not overwritten. The filename identifies the event, week, workbook revision, and a unique suffix. New claims arriving after that person's PDF was generated require another export. People first submitting after the batch started are included on the next run.
+Each export saves a **new PDF file**. Earlier PDFs remain in the folder. If more claims arrive after you export, export again and check that you are printing the updated file. KY Results shows only the most recent retry or export action; the saved PDF files remain available in the claimant folders.
 
-The previous **exportLatestClaimVoucher** function is an alias for the same batch export. It no longer selects only the latest claimant.
-
-Before printing, check claimant/payment details, receipt numbers, descriptions, congregation, amount and total, all claim rows, page breaks, and signature areas. Export requests A4 portrait with fit-to-width. PDF creation does not approve or pay the claim. There is no automatic weekly export schedule or past-week selector in this version.
+Creating or printing a PDF does not approve the claim or make a payment. Exports happen only when you choose this menu action; there is no automatic weekly export.
 
 ## Retry incomplete submissions
 
-After fixing a temporary service or access problem, select **retryPendingClaimSubmissions** and Run.
+Use retry after the cause of a processing problem has been fixed. It asks the system to continue working on the original response.
 
-- Each run attempts up to ten responses that are not marked `DONE`.
-- Further runs continue after the last attempted response and wrap around, so repeatedly invalid early responses do not block later ones.
-- A recorded claim keeps its reserved receipt number and stored receipt file ID.
-- Completed responses are skipped. Retrying a recorded response is different from submitting another response for the same expense.
+1. Read **Last error** in the Claims register. Fix the cause or ask your technical helper for help.
+2. Choose **KY Claims → Retry incomplete submissions**.
+3. Read the results in **KY Results**.
+4. Choose **Refresh status**, then check the affected Claims rows again. A successful claim should show **DONE**.
 
-Read the returned results and check Claims afterward. A retry cannot repair invalid answers or decide which of two conflicting payment details is correct. Refer these cases to the maintainer/finance IC; the current version has no general correction or voiding interface. Do not delete rows to release receipt numbers or change the internal JSON by hand.
+One run attempts up to ten incomplete responses. If more remain, run it again. Completed responses are skipped, and an existing claim keeps its assigned receipt number.
 
-## Update an existing installation
+Retrying will not correct a wrong amount or settle conflicting name/payment details. Ask finance and your technical helper to review those cases. Do not delete a claim or submit a replacement unless they have told you how to handle it.
 
-1. Obtain the new bundle and retain a copy of the previous version for reference.
-2. In the **same Apps Script project**, replace the whole `Code.gs` contents. Avoid duplicate program files.
-3. Use the matching `appsscript.json` if the update includes a changed manifest. The congregation switch, weekly batch export, and event-folder update do not add permissions beyond the current supplied manifest.
-4. Keep existing Script Properties and event resources. Do not replace the register with a new blank one.
-5. Run **setupClaimPipeline** if applying folder or congregation settings. The active form stays open and existing resources are reused.
-6. Use **showClaimPipelineStatus** to check links/settings. Confirm there is still one submission trigger, then submit a synthetic test receipt and review its result.
+## Change event settings
 
-For a new event, use a new project rather than changing this installation's event code/title. Updates pushed to GitHub do not automatically replace code already pasted into Google.
+### Choose the event folder
 
-Changing the operating finance IC is a separate handover task. Sharing a folder does not transfer the trigger creator's identity. See the [developer guide](DeveloperGuide.md#ownership-and-access) before relying on another account to operate an existing event.
+In KY Setup, paste the new normal Drive folder's link into **Event folder link (optional)**, then choose **KY Claims → 1. Prepare event / apply settings**.
+
+For an existing event, this moves the same claims folder and its contents. Existing links and receipt numbers stay the same. Check **Claims folder** and **Parent event folder** afterward. Clearing the field later leaves the claims folder where it is; it does not move it back to My Drive.
+
+Choose a folder with the intended finance access. Do not choose the claims folder itself or a folder inside it. If the move fails, check the link and your access, then try Prepare again in the same setup spreadsheet.
+
+### Choose whether to ask for congregation
+
+Before changing this setting, review any unprocessed responses with your technical helper. In KY Setup, change **Ask for congregation?**, then choose **KY Claims → 1. Prepare event / apply settings**.
+
+Ticked means claimants must choose their congregation. Unticked means new claims use **Youth**. Already-recorded claims keep their recorded congregation. The Congregation column stays on the voucher in both cases.
+
+### Start another event or change the finance IC
+
+For another event, copy the **blank template**. Do not copy a spreadsheet containing another event's claims to give to the next finance IC.
+
+If someone else will take over an existing event, arrange the handover with your technical helper. Sharing the spreadsheet or folder alone does not transfer the automatic claim processing to their account.
 
 ## Troubleshooting
 
-| Symptom or message | What to do |
+| What you see | What to do |
 | --- | --- |
-| The form is closed or setup reports `ADD_RECEIPT_UPLOAD_THEN_ACTIVATE`. | Add/check the one required upload question, then run `activateClaimPipeline`. |
-| `Add exactly one required File upload question...` | Ensure the form has exactly one File upload question. Manually check Required, maximum one file, and Image/PDF settings. |
-| The form opens Google sign-in. | Use the intended Google account and check responder access. Upload responses require Google sign-in. |
-| `The form currently has no response destination.` during an older setup run | Replace the whole script with the corrected current bundle and rerun setup in the same project. Keep its resources and settings. |
-| `Drive.Files.create is not a function` in an old bundle | Install the current script; keep Drive API v2 if that is the installed version. The importer supports v2 and v3. |
-| A submission is received but no Claims row appears. | Check raw form responses and Apps Script Executions. Invalid date/amount, missing email, or file-count problems can fail before reservation. |
-| An event folder cannot be accessed or cannot accept children. | Check the folder link/ID and the operating account's permission to add files/folders, then rerun setup. Do not create a replacement installation. |
-| Name/payment details conflict within a week. | Ask finance to review the intended details. Retrying alone does not resolve the conflict. |
-| Duplicate trigger or changed response-destination warning | Have the maintainer review the installed trigger and form/register link; do not repeatedly create new resources. |
-| PDF summary contains failed exports. | Read each person's error. Fix incomplete processing and retry; ask the maintainer to inspect missing/stale metadata. Other successful PDFs may already exist. |
-| Execution stops before the batch summary. | Check individual execution-log results and existing PDF files. Google service/runtime limits can interrupt a large batch; rerunning creates additional snapshots. |
-| Header, claim text, total, or signature area is clipped in the PDF. | Retain the PDF for diagnosis and ask the maintainer to review the template/text. Do not edit the original master to bypass validation. |
+| No **KY Claims** menu | Open the prepared setup spreadsheet on a computer and reload it. If the menu is still missing, contact your technical helper. |
+| A copied spreadsheet asks you to start setup | Choose **KY Claims → Start / open setup** in your copy. For a new event, use the blank template. |
+| Google asks you to sign in | Use the event's operating account for finance tasks, or your claimant account when submitting a receipt. |
+| The form is closed | Check that the receipt question and responder settings are correct, tick both checks in KY Setup, then choose **2. Activate form**. |
+| Activation asks you to check the receipt or responder settings | Complete [step 4](#4-check-the-form), then tick the two checkboxes in KY Setup. |
+| Activation says settings changed | Choose **1. Prepare event / apply settings**, then try **2. Activate form** again. Event code/title cannot change after preparation. |
+| Someone cannot open the claim form | Check that they are using the right link and account. Review responder access in the form editor; ask your technical helper if organisation restrictions apply. |
+| A claimant has a confirmation but no Claims entry | Check the form's Responses tab. Ask your technical helper to investigate; do not ask the claimant to submit the same expense again yet. |
+| A claim says name or payment details conflict | Compare this week's entries with the claimant. Ask finance and your technical helper how to correct it; retry alone will not fix it. |
+| The event folder cannot be opened or used | Check the folder link and whether the operating Google account can add files there. Keep using the same setup spreadsheet. |
+| A PDF export failed or stopped partway | Check KY Results and the claimant folders for PDFs already created. Ask your technical helper if the cause is unclear. Another run creates new files. |
+| A PDF has missing or cut-off text, a wrong total or a damaged layout | Do not print it for submission. Keep the PDF and ask your technical helper to investigate. |
+| An error keeps coming back | Give your technical helper the action you chose, the error text and the approximate time. Avoid sharing real payment details or receipts in public messages. |
 
-Use fictional data when reporting a problem. Do not paste passwords, authorisation tokens, or real payment details into public issues or repository files.
+## Updates and older installations
 
-## Function reference
+Your technical helper should install software updates. Existing event copies do not update themselves when the blank template or repository changes. Keep using the same event files and records during an update.
 
-Choose a function in the Apps Script editor and click **Run**, except for the automatic handler below.
-
-| Function | Purpose |
-| --- | --- |
-| `setupClaimPipeline` | Create/resume an event installation; apply parent-folder and congregation settings to an existing installation. |
-| `activateClaimPipeline` | Check the form, apply the congregation setting, install/reuse its trigger, and open it. |
-| `showClaimPipelineStatus` | Reprint setup links and applied congregation/location settings. |
-| `retryPendingClaimSubmissions` | Attempt the next batch of up to ten incomplete responses. |
-| `exportWeeklyClaimVouchers` | Export PDFs for all people with current-week claims. |
-| `exportLatestClaimVoucher` | Compatibility alias for the same weekly batch export. |
-| `onClaimFormSubmit` | Automatic form-submit handler; do not run manually. |
-
-`runVoucherPrototype` is a separate synthetic renderer test for maintainers. It does not process live form responses. Functions ending in `_` are internal helpers.
+If your existing event is operated from a code editor and has no KY Claims spreadsheet menu, ask your technical helper to use the [standalone setup and test guide](form-pipeline-test.md). Moving that event into the new setup spreadsheet needs a separate review; copying its settings into a new spreadsheet is not an upgrade.
 
 ## Current limits
 
-This version handles one event per project and one image/PDF receipt per response. It has no approval/payment execution, paid/closed-week status, OCR, receipt-content duplicate detection, automatic exports, general correction interface, or guided Setup Workbook. Exports select the current week only.
+This preview supports one event per setup spreadsheet and one receipt file per form response. It prepares vouchers but does not approve claims, track payments, make payments or convert currencies. There is no general screen for correcting or cancelling claims, and the PDF menu covers the current week only.
 
-The user has reported successful short/long voucher exports and basic multi-person submissions, folders, and numbering. The newer folder relocation and weekly batch PDF features have local tests and still need native validation. Independent installation under a second finance IC account, access boundaries, live interruption recovery, and simultaneous submissions remain acceptance checks. See [live validation](live-validation.md) and the [manual test checklist](DeveloperGuide.md#appendix-manual-testing).
+Very long item descriptions can stop voucher processing and affect later claims for that person in the same week. Keep descriptions brief and contact your technical helper if this occurs; repeatedly retrying does not fix the text.
+
+The copied-workbook workflow has passed testing with one operating Google account. Independent setup by another finance IC, multi-person PDF batches, access across accounts and simultaneous submissions still need further checks. See the [validation record](live-validation.md) for the exact evidence. Agree the remaining date, correction and printing requirements with finance before official use.

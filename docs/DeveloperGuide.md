@@ -47,7 +47,7 @@ The bundler concatenates modules in a fixed order, parses the combined script, c
 
 ### Google environment
 
-Install the bundle in a standalone Apps Script project under the event's operating account. Use the [User Guide setup sequence](UserGuide.md#set-up-an-event): manifest, Advanced Drive service, Script Properties, setup, the manually added upload question, activation, and an actual browser submission. No web-app deployment is required.
+For a standalone installation, install the bundle under the event's operating account using the [pipeline setup and test sequence](form-pipeline-test.md): manifest, Advanced Drive service, Script Properties, setup, the manually added upload question, activation, and an actual browser submission. For the bound workbook, use the [maintainer installation instructions](setup-workbook.md#maintainer-prepare-the-blank-template-once). No web-app deployment is required. The [User Guide](UserGuide.md#set-up-an-event) covers the finance IC's workbook workflow.
 
 The manifest specifies V8, `Asia/Singapore`, Advanced Drive v2 with identifier `Drive`, and these OAuth scopes:
 
@@ -95,12 +95,13 @@ The architecture diagram shows calls/responsibilities between JavaScript modules
 | Voucher planning | [VoucherCore.js](../src/VoucherCore.js): `plan`, `literal`, `pdfQuery` | Integer-cent totals, worksheet/print coordinates, literal text, row sizing, and PDF query settings. |
 | Voucher rendering/export | [Voucher.gs](../src/Voucher.gs): `VoucherRenderer.render`, `exportPdf`, `templateOptions` | Validate the official layout, resize/fill a disposable worksheet, verify totals, and save valid PDF responses. |
 | Prototype/import support | [Prototype.gs](../src/Prototype.gs): `runVoucherPrototype`, `prototypeXlsxImporter_` | Synthetic renderer checks and Drive v2/v3 XLSX import selection. |
+| Guided setup | [SetupWorkbook.gs](../src/SetupWorkbook.gs): `onOpen`, setup/activation/status/retry/export menu actions | Bind a copied controller to its own project, adapt editable event settings, require form checks, and display links/results. |
 
 `ClaimCore`, `ClaimProcessor`, and `VoucherCore` are JavaScript modules shared with Node. Their CommonJS export guards are inactive in Apps Script. Other `.gs` modules rely on Apps Script globals. The fixed bundle order makes those globals available together in `Code.gs`.
 
 ### User interaction component
 
-There are three operator surfaces: the form editor, the finance register, and manual functions in the Apps Script editor. Claimants interact only with the published Google Form. There is no custom web frontend or Setup Workbook yet.
+Operator surfaces include the form editor, finance register, standalone Apps Script functions, and the new guided Setup Workbook preview. Claimants interact only with the published Google Form. The bound workbook creates its menu in `onOpen` without accessing external resources; authorised menu actions perform setup and operation. There is no custom web frontend. See the [setup-workbook guide](setup-workbook.md) for native acceptance status and copy/installation boundaries.
 
 `onClaimFormSubmit(event)` requires both `event.response` and `event.source`, then verifies the source form and active configuration while holding the project lock. `claimInput_` maps responses by saved item IDs rather than question position/title. The collected email and response timestamp come from `FormResponse`.
 
@@ -174,7 +175,17 @@ For an active installation, setup applies root-folder placement and congregation
 
 ### Configuration and event-folder placement
 
-The [User Guide settings table](UserGuide.md#2-enter-the-event-settings) documents public properties and defaults. Internal configuration/cursor properties must not be used as operator inputs.
+The guided workbook manages these properties from its editable fields. For standalone setup, enter public settings in Apps Script **Project Settings → Script Properties** before running setup:
+
+| Property | Value | Default when absent |
+| --- | --- | --- |
+| `PIPELINE_EVENT_CODE` | Up to 40 letters, digits, underscores or hyphens, starting with a letter or digit; normalised to uppercase. | `TEST` |
+| `PIPELINE_EVENT_TITLE` | Event title, up to 150 characters. | `KY Claims Test` |
+| `PIPELINE_PARENT_FOLDER_ID` | Existing normal Drive folder ID or full folder URL. | Create the root in My Drive for a new installation; retain its current location for an existing one. |
+| `PIPELINE_ASK_CONGREGATION` | `true` shows the required dropdown; false/blank/null/missing assigns Youth. | Youth, without a question. |
+| `PIPELINE_TEMPLATE_ID` | Approved pristine template file ID, not a full URL. | `PROTOTYPE_TEMPLATE_ID` if present, otherwise the built-in official master. |
+
+Event code/title are immutable after initial configuration. Internal configuration/cursor/binding properties must not be used as operator inputs or removed to restart an event.
 
 `claimParentFolderId_` accepts a folder ID or a normal HTTPS Drive folder URL, including account-specific `/drive/u/N/folders/` links. `claimDestinationFolder_` requests Advanced Drive metadata, requires a folder with `capabilities.canAddChildren`, rejects a populated `driveId`, and rejects trashed destinations. These fields are supported by the existing Drive service versions used here.
 
@@ -283,7 +294,7 @@ Claim limits include email 254 characters, full name/payment details 200 each, i
 | Week definition | Submission week in Singapore follows the confirmed finance workflow. | Purchase-week grouping would move late receipts into older weeks and contradict D12. |
 | Number allocation | Reserve response/number in the central ledger before effects; replay by response ID. | Allocate after effects and a failed acknowledgement can leave files without a reliable identity/number assignment. |
 | Weekly updates | Reconstruct from canonical receipt-ready records and stage a fresh worksheet in a stable workbook. | Appending directly is simpler, but uncertain retries can duplicate rows and partial renders can damage the only usable voucher. |
-| Configuration | Script Properties are workable for the current standalone installation. | A Setup Workbook could improve onboarding but is not implemented; changing the UI must preserve existing internal IDs/state. |
+| Configuration | Script Properties remain canonical; the setup-workbook preview maps its editable event fields into them. | Direct property editing remains available to maintainers. The guided path guards copies against inherited installation IDs and preserves existing same-project state. |
 | Folder placement | Move one claims root rather than recreate descendant resources. | Copying/rebuilding would require reconciling every file ID, link, trigger, and receipt record. |
 | PDF scope | Batch all current-week claimants and isolate per-person failures. | Selecting only the latest record omits other claimants and can select an older week. |
 | PDF retention | Keep separately named snapshots, preserving previous exports. | Replacement simplifies folder contents but needs an accepted correction/submission-retention policy. |
@@ -312,18 +323,36 @@ Use Apps Script Executions for trigger errors and timing; use Claims status/Last
 
 Do not commit real records, payment details, credentials, or OAuth tokens. Use synthetic fixtures for reproductions. Scope a native test record to the source fingerprint, account/setup, inputs, observed outputs, and specific cases actually checked.
 
+### Standalone operation and updates
+
+For existing standalone installations, choose a public function in the Apps Script editor and click **Run**:
+
+| Function | Purpose |
+| --- | --- |
+| `setupClaimPipeline` | Create/resume setup and apply parent-folder/congregation settings. |
+| `activateClaimPipeline` | Validate the form, apply congregation settings, install/reuse the trigger, and open submissions. |
+| `showClaimPipelineStatus` | Log resource links and applied settings. |
+| `retryPendingClaimSubmissions` | Attempt the next batch of up to ten incomplete responses. |
+| `exportWeeklyClaimVouchers` | Export PDFs for all current-week claimants. |
+| `exportLatestClaimVoucher` | Compatibility alias for the same weekly batch. |
+
+Do not run `onClaimFormSubmit` manually; it requires the actual form-submit event. `runVoucherPrototype` is a separate synthetic renderer test. Functions ending in `_` are internal helpers.
+
+For an update, retain the previous bundle, replace the complete Code.gs in the **same project**, avoid duplicate program files, and install the matching manifest if it changed. Keep Script Properties, register metadata and event resources intact. Apply folder/congregation settings through setup, verify links/settings and one submission trigger, then submit a synthetic test and review processing/PDF results. Updating the repository or blank workbook does not update existing installations. A standalone project cannot become spreadsheet-bound simply by moving its project file; migration and account handover need separate review.
+
 ### Automated checks
 
-CI runs source/link checks, tests, and both bundle modes:
+CI runs source/link checks, tests, and all three bundle-guide modes:
 
 ```sh
 npm run check
 npm test
 npm run bundle
 npm run bundle -- --pipeline
+npm run bundle -- --installer
 ```
 
-The current suite has 133 individual tests across nine files. Some environments report only nine file-level results for `npm test`; run a file directly to see its individual cases, for example `node test/pipeline-export.test.js`.
+The current suite has 150 individual tests across ten files. Some environments report only ten file-level results for `npm test`; run a file directly to see its individual cases, for example `node test/setup-workbook.test.js`.
 
 | Test file | Principal coverage |
 | --- | --- |
@@ -336,6 +365,7 @@ The current suite has 133 individual tests across nine files. Some environments 
 | `pipeline-entry.test.js` | Setup/activation, settings, response extraction, retry fairness, and controller-to-processor scenarios. |
 | `pipeline-export.test.js` | All current-week claimants, no-input skips, Singapore boundary, partial failures, snapshot retention, legacy alias. |
 | `pipeline-folders.test.js` | Parent URL/ID parsing, access preflight, relocation, defaults, move failures/acknowledgements, invalid targets. |
+| `setup-workbook.test.js` | Menu entry points, valid/immutable settings, activation checks, incomplete setup/layout recovery, copy isolation with/without copied properties, reserved-sheet preservation, and readable results. |
 
 Service substitutes are deliberately limited. They do not prove Google authorisation, real form-trigger delivery, upload ownership, concurrent native execution, Sheets layout fidelity, or printed PDF appearance. An API/script-created form response does not establish browser-trigger behaviour.
 
@@ -361,14 +391,14 @@ These stories summarise the accepted scope and current delivery boundaries; they
 
 | ID | As a | I want to | So that | Current support |
 | --- | --- | --- | --- | --- |
-| US01 | Finance IC | Set up an independent event | Other events' records and numbering stay separate. | Standalone setup/activation; guided installer pending. |
-| US02 | Finance IC | Keep claims under the event's planning folder | Event documents have one organised location. | Parent-folder property and existing-root relocation; native validation pending. |
+| US01 | Finance IC | Set up an independent event | Other events' records and numbering stay separate. | Standalone setup/activation and copied blank workbook tested under one account; second-IC installation pending. |
+| US02 | Finance IC | Keep claims under the event's planning folder | Event documents have one organised location. | Parent-folder property and guided folder-link input; own-account initial preparation and existing-root relocation exercised natively. Shared-folder access remains pending. |
 | US03 | Claimant | Submit one expense and receipt through a form | I do not need to create vouchers manually. | Browser form and collected email. |
 | US04 | Finance IC | Number receipts across all claimants | Receipts, register rows, and vouchers share a reference. | Persisted event-wide sequence. |
 | US05 | Finance IC | Reuse each person's weekly workbook | Weekly claims stay together without duplicate rows. | Canonical rebuild and staged replacement. |
 | US06 | Finance IC | Default Youth or ask for congregation | The form asks only the relevant questions. | Script Property applied by setup/activation. |
 | US07 | Finance IC | Retry interrupted processing | Saved IDs and numbers are reused. | Manual fair retry batches; cross-service failure limits apply. |
-| US08 | Finance IC | Export every current-week claimant | Nobody with claims is omitted in favour of the latest submitter. | Per-person batch PDFs, no-input skips; native batch validation pending. |
+| US08 | Finance IC | Export every current-week claimant | Nobody with claims is omitted in favour of the latest submitter. | Per-person batch PDFs and no-input skips; native one-claimant path passed, multi-person batch validation pending. |
 
 ### Use cases
 
