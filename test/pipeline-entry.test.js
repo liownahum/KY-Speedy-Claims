@@ -46,6 +46,7 @@ function environment() {
   const register = { getId: () => 'register-id', getSheets: () => [{ setName() {} }] };
   const store = { records: () => [] };
   const context = vm.createContext({
+    ClaimCore: require('../src/ClaimCore.js'),
     PropertiesService: { getScriptProperties: () => ({ getProperty: key => properties.get(key) ?? null, setProperty(key, value) { calls.push(['property', key, value]); properties.set(key, value); } }) },
     LockService: { getScriptLock: () => ({ waitLock() { calls.push(['lock']); }, releaseLock() { calls.push(['unlock']); } }) },
     Utilities: { getUuid: () => 'unique-id', formatDate: () => '2026-11-12' },
@@ -547,4 +548,100 @@ test('empty retry batches leave the saved cursor unchanged', () => {
   env.context.processClaimResponse_ = () => assert.fail('Completed responses must be skipped');
   assert.equal(env.context.retryPendingClaimSubmissions().length, 0);
   assert.equal(env.properties.get('KY_CLAIM_RETRY_CURSOR'), 'r0');
+});
+
+test('event-specific category and receipt-type dropdowns are required, reused and read by item ID', () => {
+  const env = environment();
+  env.properties.set('PIPELINE_CATEGORIES', JSON.stringify([{ name: 'Games', prefix: 'G' }, { name: 'Hospitality', prefix: 'H' }]));
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  const before = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  const categoryItem = env.items.find(item => item.id === before.questions.category);
+  assert.deepEqual(Array.from(categoryItem.choices), ['Games', 'Hospitality']);
+  assert.equal(categoryItem.required, true);
+  const receiptItem = env.items.find(item => item.id === before.questions.receiptType);
+  assert.deepEqual(Array.from(receiptItem.choices), ['Hardcopy', 'E-receipt']); assert.equal(receiptItem.required, true);
+  const pipeline = connectProcessor(env);
+  const claim = env.context.onClaimFormSubmit({ source: env.form, response: submission(before, 'cat1', { category: 'Games', receiptType: 'Hardcopy' }) });
+  assert.equal(claim.status, 'DONE'); assert.equal(claim.receiptNumber, 1);
+  assert.equal(claim.payload.categoryPrefix, 'G'); assert.equal(claim.payload.receiptType, 'Hardcopy');
+  env.context.setupClaimPipeline();
+  const after = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  assert.equal(after.questions.category, before.questions.category); assert.equal(after.questions.receiptType, before.questions.receiptType);
+  assert.equal(env.items.filter(item => item.title === 'Expense category').length, 1);
+  assert.equal(pipeline.records.size, 1);
+});
+
+test('invalid categories stop before resources and invalid answers stop before reserving a receipt', () => {
+  const env = environment();
+  env.properties.set('PIPELINE_CATEGORIES', '[{"name":"Games","prefix":"G"},{"name":"Decor","prefix":"G"}]');
+  assert.throws(() => env.context.setupClaimPipeline(), /different letter/);
+  assert.equal(env.calls.some(call => ['folder', 'template', 'form', 'register'].includes(call[0])), false);
+  env.properties.set('PIPELINE_CATEGORIES', '[{"name":"Games","prefix":"G"}]');
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  const config = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE')); const pipeline = connectProcessor(env);
+  for (const values of [{ category: 'Unknown', receiptType: 'E-receipt' }, { category: 'Games', receiptType: 'Other' }]) {
+    assert.throws(() => env.context.onClaimFormSubmit({ source: env.form, response: submission(config, 'invalid', values) }));
+  }
+  assert.equal(pipeline.records.size, 0);
+});
+
+test('active events retain old mappings and saved claim details while accepting a new category', () => {
+  const env = environment();
+  const first = [{ name: 'Games', prefix: 'G' }];
+  env.properties.set('PIPELINE_CATEGORIES', JSON.stringify(first));
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  const config = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE')); const pipeline = connectProcessor(env);
+  let fail = true;
+  const ports = env.context.claimFilePorts_;
+  env.context.claimFilePorts_ = () => ({ ...ports(), renderWeek() { if (fail) { fail = false; throw new Error('Render failed'); } } });
+  assert.throws(() => env.context.onClaimFormSubmit({ source: env.form, response: submission(config, 'saved', { category: 'Games', receiptType: 'Hardcopy' }) }), /Render failed/);
+  for (const values of [[], [{ name: 'Games', prefix: 'D' }]]) {
+    env.properties.set('PIPELINE_CATEGORIES', JSON.stringify(values));
+    assert.throws(() => env.context.setupClaimPipeline(), /Keep existing/);
+    assert.deepEqual(Array.from(env.items.find(item => item.id === config.questions.category).choices), ['Games']);
+  }
+  env.properties.set('PIPELINE_CATEGORIES', JSON.stringify([...first, { name: 'Decor', prefix: 'D' }]));
+  env.context.setupClaimPipeline();
+  const current = JSON.parse(env.properties.get('KY_CLAIM_PIPELINE'));
+  const result = env.context.onClaimFormSubmit({ source: env.form, response: submission(current, 'saved', { category: 'Decor', receiptType: 'E-receipt' }) });
+  assert.equal(result.payload.category, 'Games'); assert.equal(result.payload.receiptType, 'Hardcopy');
+  assert.equal(result.receiptNumber, 1); assert.equal(pipeline.records.size, 1);
+  assert.equal(env.context.onClaimFormSubmit({ source: env.form, response: submission(current, 'next', { category: 'Decor', receiptType: 'E-receipt' }) }).payload.categoryPrefix, 'D');
+});
+
+test('category setup does not reinterpret an already-used legacy form', () => {
+  for (const active of [false, true]) {
+    const env = environment(); env.context.setupClaimPipeline(); env.addUpload();
+    if (active) env.context.activateClaimPipeline();
+    else env.form.responses = [{ getId: () => 'old-response' }];
+    env.properties.set('PIPELINE_CATEGORIES', '[{"name":"Games","prefix":"G"}]');
+    assert.throws(() => env.context.setupClaimPipeline(), /before activating|already has responses/);
+    assert.equal(env.items.some(item => item.title === 'Expense category'), false);
+  }
+});
+
+test('category question creation resumes after a lost configuration write without duplicates', () => {
+  const env = environment();
+  env.properties.set('PIPELINE_CATEGORIES', '[{"name":"Games","prefix":"G"}]');
+  const save = env.context.saveClaimConfig_; let fail = true;
+  env.context.saveClaimConfig_ = config => {
+    if (config.categories?.length && fail) { fail = false; throw new Error('Save failed'); }
+    save(config);
+  };
+  assert.throws(() => env.context.setupClaimPipeline(), /Save failed/);
+  env.context.setupClaimPipeline();
+  assert.equal(env.items.filter(item => item.title === 'Expense category').length, 1);
+  assert.equal(env.items.filter(item => item.title === 'Receipt type').length, 1);
+});
+
+test('duplicate or incorrectly typed category questions stop before changing dropdown choices', () => {
+  for (const kind of ['duplicate', 'wrong-type']) {
+    const env = environment(); env.context.setupClaimPipeline();
+    env.properties.set('PIPELINE_CATEGORIES', '[{"name":"Games","prefix":"G"}]');
+    if (kind === 'duplicate') {
+      env.form.addListItem().setTitle('Expense category'); env.form.addListItem().setTitle('Expense category');
+    } else env.form.addTextItem().setTitle('Receipt type');
+    assert.throws(() => env.context.setupClaimPipeline(), /Duplicate|Unexpected question type/);
+    assert.equal(env.items.filter(item => item.title === 'Expense category' && item.choices).length, 0);
+  }
 });

@@ -29,6 +29,8 @@ function environment() {
       return result;
     };
     for (const method of ['setColumnWidth', 'setColumnWidths', 'setRowHeights', 'setFrozenRows', 'hideColumns']) sheet[method] = () => sheet;
+    // Native Sheet.setFrozenRows returns void, so subsequent layout calls cannot chain from it.
+    sheet.setFrozenRows = count => { sheet.frozenRows = count; };
     const setRowHeight = sheet.setRowHeight.bind(sheet);
     sheet.setRowHeight = (row, height) => { setRowHeight(row, height); return sheet; };
     sheet.getLastRow = () => Math.max(0, ...[...sheet.cells.keys()].map(key => Number(key.split(',')[0])));
@@ -40,6 +42,7 @@ function environment() {
   book.toast = (message, title) => effects.push(['toast', title, message]);
   const menu = { addItem(label, handler) { menus.push([label,handler]); return this; }, addSeparator() {return this;}, addToUi() {return this;} };
   const context = vm.createContext({
+    ClaimCore: require('../src/ClaimCore.js'),
     VoucherCore, console:{log(){},error(){}},
     SpreadsheetApp: { getActiveSpreadsheet: () => book, getUi: () => ({createMenu: () => menu}), openById: () => ({}) },
     PropertiesService: {getScriptProperties: () => ({
@@ -63,6 +66,7 @@ function environment() {
     const existing = context.claimConfig_(false);
     const config = existing || {eventCode:properties.get('PIPELINE_EVENT_CODE'),eventTitle:properties.get('PIPELINE_EVENT_TITLE'),questions:{},active:false};
     config.formId='form';config.registerId='register';config.rootFolderId='folder';
+    config.categories=JSON.parse(properties.get('PIPELINE_CATEGORIES') || '[]');
     context.saveClaimConfig_(config);
     if(env.failPrepare) throw new Error('Temporary destination failure');
     return context.claimStatus_(config);
@@ -90,7 +94,7 @@ test('opening adds menu actions without creating resources or configuration',()=
 test('initialisation is repeatable and retains edited settings and unrelated tabs',()=>{
   const env=environment();env.book.insertSheet('Finance notes').getRange('A1').setValue('Keep');
   env.init();env.settings();env.init();
-  assert.equal(env.sheet().getRange('B5').getValue(),'CAMP26');assert.equal(env.book.sheets.size,3);
+  assert.equal(env.sheet().getRange('B5').getValue(),'CAMP26');assert.equal(env.book.sheets.size,4);
   assert.equal(env.book.getSheetByName('Finance notes').getRange('A1').getValue(),'Keep');
 });
 test('invalid settings do not create resources or write pipeline properties',()=>{
@@ -196,4 +200,60 @@ test('refresh counts canonical processed records and retry reports an empty scan
   env.records=[{status:'DONE'},{status:'ERROR'},{status:'PENDING'}];env.context.refreshClaimSetup();
   assert.equal(env.sheet().getRange('B24').getValue(),1);assert.equal(env.sheet().getRange('B25').getValue(),2);
   env.context.retryClaimEvent();assert.equal(env.book.getSheetByName('KY Results').getRange('A2').getValue(),'No pending responses found.');
+});
+
+test('event category table applies normalised names and letters while rejecting invalid rows before setup',()=>{
+  const env=environment();env.init();env.settings();
+  const table=env.book.getSheetByName('KY Categories');
+  table.getRange('A6:B8').setValues([[' Games ','g'],['',''],['Hospitality','H']]);
+  assert.notEqual(env.context.prepareClaimEvent().status,'ERROR');
+  assert.deepEqual(JSON.parse(env.properties.get('PIPELINE_CATEGORIES')),[{name:'Games',prefix:'G'},{name:'Hospitality',prefix:'H'}]);
+  table.getRange('A9:B9').setValues([['Decor','G']]);
+  const before=env.properties.get('PIPELINE_CATEGORIES');
+  assert.match(env.context.prepareClaimEvent().error,/different letter/);
+  assert.equal(env.properties.get('PIPELINE_CATEGORIES'),before);
+  assert.equal(env.effects.filter(call=>call[0]==='prepare').length,1);
+  table.getRange('A9:B9').setValues([['Decor','']]);
+  assert.match(env.context.prepareClaimEvent().error,/Category letter/);
+});
+
+test('activation rejects category edits until applied and active mappings cannot be changed',()=>{
+  const env=environment();env.init();env.settings();
+  const table=env.book.getSheetByName('KY Categories');table.getRange('A6:B6').setValues([['Games','G']]);
+  env.context.prepareClaimEvent();env.sheet().getRange('B11:B12').setValues([[true],[true]]);
+  table.getRange('A7:B7').setValues([['Decor','D']]);
+  assert.match(env.context.activateClaimEvent().error,/Settings changed/);
+  env.context.prepareClaimEvent();assert.notEqual(env.context.activateClaimEvent().status,'ERROR');
+  table.getRange('B6').setValue('H');
+  assert.match(env.context.prepareClaimEvent().error,/Keep existing/);
+  assert.equal(JSON.parse(env.properties.get('PIPELINE_CATEGORIES'))[0].prefix,'G');
+});
+
+test('category lists persist on reopen but are cleared in a new event copy',()=>{
+  const env=environment();env.init();env.settings();
+  env.book.getSheetByName('KY Categories').getRange('A6:B6').setValues([['Games','G']]);
+  env.context.prepareClaimEvent();env.init();
+  assert.equal(env.book.getSheetByName('KY Categories').getRange('A6').getValue(),'Games');
+  env.book.id='book-B';env.scriptId='script-B';env.init();
+  assert.equal(env.book.getSheetByName('KY Categories').getRange('A6').getValue(),'');
+  assert.equal(env.properties.has('PIPELINE_CATEGORIES'),false);
+  env.settings('RETREAT','Retreat');
+  env.book.getSheetByName('KY Categories').getRange('A6:B6').setValues([['Transport','T']]);
+  env.context.prepareClaimEvent();
+  assert.deepEqual(JSON.parse(env.properties.get('PIPELINE_CATEGORIES')),[{name:'Transport',prefix:'T'}]);
+});
+
+test('foreign category tables are preserved before a copied installation can reset any properties',()=>{
+  const env=environment();env.init();env.settings();env.context.prepareClaimEvent();
+  const old=env.properties.get('KY_CLAIM_PIPELINE');
+  env.book.getSheetByName('KY Categories').getRange('J1').setValue('User data');
+  env.book.id='book-B';env.scriptId='script-B';
+  assert.equal(env.init().status,'ERROR');assert.equal(env.properties.get('KY_CLAIM_PIPELINE'),old);
+});
+
+test('an interrupted category-table layout is completed by reopening setup',()=>{
+  const env=environment();env.init();
+  env.book.getSheetByName('KY Categories').getRange('J2').setValue('BUILDING');
+  env.settings();assert.match(env.context.prepareClaimEvent().error,/category table is incomplete/);
+  env.init();assert.equal(env.book.getSheetByName('KY Categories').getRange('J2').getValue(),'READY');
 });

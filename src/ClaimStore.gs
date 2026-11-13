@@ -15,6 +15,19 @@ function claimStore_(spreadsheet) {
     return tab;
   }
   var claims = sheet('Claims', headers);
+  var categoryHeaders = ['Expense category', 'Category letter', 'Receipt type'];
+  var categoryHeaderRange = claims.getRange(1, 16, 1, categoryHeaders.length);
+  var existingCategoryHeaders = categoryHeaderRange.getValues()[0];
+  if (existingCategoryHeaders.some(function (value, index) { return value !== '' && value !== categoryHeaders[index]; })) {
+    throw new Error('Claims category columns are occupied or changed. Ask the maintainer to review columns P to R.');
+  }
+  if (existingCategoryHeaders.some(function (value) { return value === ''; }) && claims.getLastRow() > 1) {
+    var extraValues = claims.getRange(2, 16, claims.getLastRow() - 1, 3).getValues();
+    if (extraValues.some(function (row) {
+      return row.some(function (value, index) { return existingCategoryHeaders[index] === '' && value !== ''; });
+    })) throw new Error('Claims category columns contain unlabelled data. Ask the maintainer to review columns P to R.');
+  }
+  if (JSON.stringify(existingCategoryHeaders) !== JSON.stringify(categoryHeaders)) categoryHeaderRange.setValues([categoryHeaders]);
   claims.getRange('J:J').setNumberFormat('0.00');
   claims.hideColumns(15);
   sheet('People', ['Key', 'State JSON']);
@@ -42,7 +55,7 @@ function claimStore_(spreadsheet) {
     records: records,
     saveRecord: function (record) {
       var p = record.payload;
-      var values = [record.id, record.receiptNumber, record.reference, new Date(record.submittedAt), record.week, p.email, p.fullName, p.description, p.congregation, p.amountCents / 100, record.status, record.receiptUrl || '', record.weeklyFileId ? 'https://docs.google.com/spreadsheets/d/' + record.weeklyFileId + '/edit' : '', record.error || '', JSON.stringify(record)];
+      var values = [record.id, record.receiptNumber, record.reference, new Date(record.submittedAt), record.week, p.email, p.fullName, p.description, p.congregation, p.amountCents / 100, record.status, record.receiptUrl || '', record.weeklyFileId ? 'https://docs.google.com/spreadsheets/d/' + record.weeklyFileId + '/edit' : '', record.error || '', JSON.stringify(record), p.category || '', p.categoryPrefix || '', p.receiptType || ''];
       put(claims, record.id, values.map(function (value) { return typeof value === 'string' ? VoucherCore.literal(value) : value; }));
     },
     getMeta: function (name, key) {

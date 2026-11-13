@@ -101,6 +101,56 @@ function claimConfigureCongregation_(form, config) {
   }
   saveClaimConfig_(config);
 }
+function claimCategoriesSetting_() {
+  var raw = PropertiesService.getScriptProperties().getProperty('PIPELINE_CATEGORIES');
+  if (!raw) return [];
+  var values;
+  try { values = JSON.parse(raw); }
+  catch (error) { throw new Error('The category setting is unreadable. Apply the list from KY Categories again.'); }
+  return ClaimCore.categories(values);
+}
+function claimConfigureCategories_(form, config, categories) {
+  var previous = config.categories || [];
+  ClaimCore.categoryChanges(previous, categories, config.active);
+  if (!previous.length && categories.length && config.active) {
+    throw new Error('Set up categories before activating the form. Ask the maintainer to review an existing active event.');
+  }
+  if (!previous.length && categories.length && form.getResponses().length) {
+    throw new Error('This form already has responses. Ask the maintainer to review existing claims before enabling categories.');
+  }
+  var fields = [
+    ['category', 'Expense category', categories.map(function (value) { return value.name; })],
+    ['receiptType', 'Receipt type', ['Hardcopy', 'E-receipt']]
+  ];
+  // Check both names/types before editing either question.
+  var items = fields.map(function (field) {
+    var id = config.questions[field[0]];
+    var saved = id ? form.getItemById(id) : null;
+    var matching = form.getItems().filter(function (item) { return item.getTitle() === field[1]; });
+    if (matching.length > 1 || (saved && matching.length && matching[0].getId() !== saved.getId())) {
+      throw new Error('Duplicate form questions need review: ' + field[1]);
+    }
+    var item = saved || matching[0];
+    if (item && item.getType().toString() !== 'LIST') throw new Error('Unexpected question type: ' + field[1]);
+    if (config.active && previous.length && !saved) throw new Error('A category or receipt-type question was deleted. Ask the maintainer to restore it.');
+    return item;
+  });
+  fields.forEach(function (field, index) {
+    var item = items[index];
+    if (categories.length) {
+      if (!item) item = form.addListItem().setTitle(field[1]);
+      form.getItemById(item.getId()).asListItem().setChoiceValues(field[2]).setRequired(true);
+      config.questions[field[0]] = item.getId();
+    } else if (config.questions[field[0]]) {
+      if (item) form.deleteItem(item);
+      delete config.questions[field[0]];
+    } else if (item) {
+      throw new Error('A form question already uses the reserved title: ' + field[1]);
+    }
+  });
+  config.categories = categories;
+  saveClaimConfig_(config);
+}
 function claimStatus_(config) {
   var form = FormApp.openById(config.formId);
   var status = {
@@ -108,6 +158,7 @@ function claimStatus_(config) {
     eventCode: config.eventCode,
     askCongregation: Boolean(config.questions.congregation),
     defaultCongregation: config.questions.congregation ? null : 'Youth',
+    categories: config.categories || [],
     formEditUrl: form.getEditUrl(), formSubmitUrl: form.getPublishedUrl(),
     registerUrl: 'https://docs.google.com/spreadsheets/d/' + config.registerId + '/edit',
     folderUrl: 'https://drive.google.com/drive/folders/' + config.rootFolderId,
@@ -127,6 +178,8 @@ function setupClaimPipeline_() {
     var title = (properties.getProperty('PIPELINE_EVENT_TITLE') || 'KY Claims Test').trim();
     if (!/^[A-Z0-9][A-Z0-9_-]{0,39}$/.test(code) || !title || title.length > 150) throw new Error('Use an event code with letters/numbers/hyphens and a short event title.');
     var config = claimConfig_(false);
+    var categories = claimCategoriesSetting_();
+    ClaimCore.categoryChanges(config && config.categories, categories, config && config.active);
     if (config && (config.eventCode !== code || config.eventTitle !== title)) throw new Error('This project already has another event configuration. Use a separate project for another event.');
     if (!config) {
       config = { version: 1, eventId: Utilities.getUuid(), eventCode: code, eventTitle: title, timezone: 'Asia/Singapore', questions: {}, active: false };
@@ -134,6 +187,7 @@ function setupClaimPipeline_() {
     }
     var folder = claimRootFolder_(config);
     if (config.active) {
+      claimConfigureCategories_(FormApp.openById(config.formId), config, categories);
       claimConfigureCongregation_(FormApp.openById(config.formId), config);
       return claimStatus_(config);
     }
@@ -185,6 +239,7 @@ function setupClaimPipeline_() {
       config.questions[field[0]] = item.getId(); saveClaimConfig_(config);
     });
     claimConfigureCongregation_(form, config);
+    claimConfigureCategories_(form, config, categories);
     form.getItemById(config.questions.purchaseDate).asTextItem().setHelpText('Use YYYY-MM-DD, for example 2026-11-12. Purchase date is stored separately; grouping uses submission week.');
     form.getItemById(config.questions.amount).asTextItem().setHelpText('A positive amount such as 12.50. Use one event currency; no currency conversion.');
     var destinationId = null;
@@ -205,6 +260,7 @@ function activateClaimPipeline() {
 function activateClaimPipeline_() {
     var config = claimConfig_(true);
     var form = FormApp.openById(config.formId);
+    claimConfigureCategories_(form, config, claimCategoriesSetting_());
     var uploads = form.getItems().filter(function (item) { return item.getType().toString() === 'FILE_UPLOAD'; });
     if (uploads.length !== 1) throw new Error('Add exactly one required File upload question in the form editor: Receipt; allow one image or PDF, then rerun activation.');
     config.uploadQuestionId = uploads[0].getId();
@@ -232,6 +288,7 @@ function claimInput_(response, config) {
     fullName: answers[config.questions.fullName], paymentDetails: answers[config.questions.paymentDetails],
     purchaseDate: answers[config.questions.purchaseDate], description: answers[config.questions.description],
     congregation: config.questions.congregation ? answers[config.questions.congregation] : 'Youth',
+    category: answers[config.questions.category], receiptType: answers[config.questions.receiptType],
     amount: answers[config.questions.amount], fileIds: answers[config.uploadQuestionId]
   };
 }

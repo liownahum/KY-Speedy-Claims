@@ -1,12 +1,13 @@
 /** Bound-spreadsheet interface. Each copied workbook must own a separate script project. */
-var KY_SETUP_VERSION_ = '0.2.0-preview.1';
+var KY_SETUP_VERSION_ = '0.2.0-preview.2';
 var KY_SETUP_SHEET_ = 'KY Setup';
 var KY_RESULTS_SHEET_ = 'KY Results';
+var KY_CATEGORIES_SHEET_ = 'KY Categories';
 var KY_SETUP_MARKER_ = 'KY_SETUP_V1';
 var KY_SETUP_OWNED_PROPERTIES_ = [
   'KY_SETUP_SCRIPT_ID', 'KY_CLAIM_PIPELINE', 'KY_CLAIM_RETRY_CURSOR',
   'PIPELINE_EVENT_CODE', 'PIPELINE_EVENT_TITLE', 'PIPELINE_PARENT_FOLDER_ID',
-  'PIPELINE_ASK_CONGREGATION', 'PIPELINE_TEMPLATE_ID'
+  'PIPELINE_ASK_CONGREGATION', 'PIPELINE_TEMPLATE_ID', 'PIPELINE_CATEGORIES'
 ];
 
 // Simple trigger: create the menu only; never create resources or request access here.
@@ -53,6 +54,45 @@ function claimSetupResultsSheet_(book) {
   sheet.getRange('J1').setValue(KY_SETUP_MARKER_);
   sheet.hideColumns(10);
   return sheet;
+}
+function claimSetupCategoriesSheet_(book, reset) {
+  var sheet = book.getSheetByName(KY_CATEGORIES_SHEET_);
+  if (sheet && sheet.getRange('J1').getValue() !== KY_SETUP_MARKER_) {
+    throw new Error('A different worksheet already uses the name KY Categories. Rename that worksheet before continuing.');
+  }
+  var create = !sheet;
+  if (!sheet) sheet = book.insertSheet(KY_CATEGORIES_SHEET_);
+  if (create || reset || sheet.getRange('J2').getValue() !== 'READY') {
+    sheet.getRange('J1:J2').setValues([[KY_SETUP_MARKER_], ['BUILDING']]);
+    sheet.getRange(1, 1, sheet.getMaxRows(), 2).clearContent();
+    sheet.getRange('A1:B5').setValues([
+      ['EVENT EXPENSE CATEGORIES', 'Fill the blue cells from row 6.'],
+      ['Your event, your list', 'Examples: Games / G; Hospitality / H. Enter your own list below.'],
+      ['One category per row', 'Use a different letter A–Z for each category. Leave blank only for events without categories.'],
+      ['Apply the list', 'Choose KY Claims > 1. Prepare event / apply settings. Active forms allow additions only.'],
+      ['Category name', 'Letter']
+    ]).setWrap(true).setFontFamily('Arial').setVerticalAlignment('top');
+    sheet.getRange('A1:B1').setBackground('#17365d').setFontColor('#ffffff').setFontWeight('bold');
+    sheet.getRange('A5:B5').setFontWeight('bold');
+    sheet.getRange('A6:B31').setBackground('#e8f0fe').setNumberFormat('@');
+    sheet.setColumnWidth(1, 300).setColumnWidth(2, 520).setRowHeights(1, 4, 56);
+    sheet.setFrozenRows(5);
+    sheet.hideColumns(10);
+    sheet.getRange('J2').setValue('READY');
+  }
+  return sheet;
+}
+function claimSetupCategories_(book) {
+  var sheet = book.getSheetByName(KY_CATEGORIES_SHEET_);
+  if (!sheet || sheet.getRange('J1').getValue() !== KY_SETUP_MARKER_) {
+    throw new Error('Choose Start / open setup to create the KY Categories tab.');
+  }
+  if (sheet.getRange('J2').getValue() !== 'READY') throw new Error('The category table is incomplete. Choose Start / open setup again.');
+  var count = Math.max(sheet.getLastRow() - 5, 0);
+  var values = count ? sheet.getRange(6, 1, count, 2).getValues() : [];
+  return ClaimCore.categories(values.filter(function (row) {
+    return row.some(function (value) { return String(value).trim() !== ''; });
+  }).map(function (row) { return { name: row[0], prefix: row[1] }; }));
 }
 function claimSetupLayout_(book, sheet) {
   sheet.getRange('E1:E4').setValues([[KY_SETUP_MARKER_], [book.getId()], [ScriptApp.getScriptId()], ['BUILDING']]);
@@ -118,6 +158,10 @@ function initializeClaimSetupWorkbook() {
       if (existingResults && existingResults.getRange('J1').getValue() !== KY_SETUP_MARKER_) {
         throw new Error('A different worksheet already uses the name KY Results. Rename that worksheet before continuing.');
       }
+      var existingCategories = book.getSheetByName(KY_CATEGORIES_SHEET_);
+      if (existingCategories && existingCategories.getRange('J1').getValue() !== KY_SETUP_MARKER_) {
+        throw new Error('A different worksheet already uses the name KY Categories. Rename that worksheet before continuing.');
+      }
       var fresh = !sheet || sheet.getLastRow() === 0;
       if (sheet && !fresh && sheet.getRange('E1').getValue() !== KY_SETUP_MARKER_) {
         throw new Error('A different worksheet already uses the name KY Setup. Rename that worksheet before continuing.');
@@ -151,6 +195,10 @@ function initializeClaimSetupWorkbook() {
         claimSetupLayout_(book, sheet);
         results.getRange(1, 1, results.getMaxRows(), 8).clearContent();
       }
+      claimSetupCategoriesSheet_(book, fresh);
+      claimSetupText_(sheet, 'B3', 'Fill the blue cells and the KY Categories tab');
+      claimSetupText_(sheet, 'C3', 'Enter this event\'s category names and letters, then choose KY Claims > 1. Prepare event / apply settings.');
+      claimSetupText_(sheet, 'B27', KY_SETUP_VERSION_);
       sheet.getRange('C1').setFontSize(11);
       sheet.setRowHeight(1, 48);
       properties.setProperty('KY_SETUP_SCRIPT_ID', scriptId);
@@ -160,25 +208,27 @@ function initializeClaimSetupWorkbook() {
   }, true);
 }
 
-function claimSetupSettings_(sheet) {
+function claimSetupSettings_(sheet, book) {
   var values = sheet.getRange('B5:B8').getValues().map(function (row) { return row[0]; });
   var code = String(values[0] || '').trim().toUpperCase();
   var title = String(values[1] || '').trim();
   if (!/^[A-Z0-9][A-Z0-9_-]{0,39}$/.test(code)) throw new Error('Enter an event code: up to 40 letters, digits, underscores or hyphens; start with a letter or digit.');
   if (!title || title.length > 150) throw new Error('Enter an event title of 1 to 150 characters.');
   if (values[3] !== true && values[3] !== false) throw new Error('Use the Ask for congregation checkbox.');
-  return { code: code, title: title, parent: claimParentFolderId_(values[2]), ask: values[3] };
+  return { code: code, title: title, parent: claimParentFolderId_(values[2]), ask: values[3], categories: claimSetupCategories_(book) };
 }
-function claimSetupApply_(sheet) {
-  var settings = claimSetupSettings_(sheet);
+function claimSetupApply_(sheet, book) {
+  var settings = claimSetupSettings_(sheet, book);
   var config = claimConfig_(false);
   if (config && (config.eventCode !== settings.code || config.eventTitle !== settings.title)) {
     throw new Error('Event code and title are fixed after preparation. Use another copy of the blank setup workbook for another event.');
   }
+  ClaimCore.categoryChanges(config && config.categories, settings.categories, config && config.active);
   var properties = PropertiesService.getScriptProperties();
   properties.setProperty('PIPELINE_EVENT_CODE', settings.code);
   properties.setProperty('PIPELINE_EVENT_TITLE', settings.title);
   properties.setProperty('PIPELINE_ASK_CONGREGATION', String(settings.ask));
+  properties.setProperty('PIPELINE_CATEGORIES', JSON.stringify(settings.categories));
   if (settings.parent) properties.setProperty('PIPELINE_PARENT_FOLDER_ID', settings.parent);
   else properties.deleteProperty('PIPELINE_PARENT_FOLDER_ID');
   return settings;
@@ -203,7 +253,7 @@ function claimSetupStatus_(book, sheet) {
 function prepareClaimEvent() {
   return claimSetupAction_('Prepare event', function (book, sheet) {
     return claimLock_(function () {
-      claimSetupApply_(sheet);
+      claimSetupApply_(sheet, book);
       var status = setupClaimPipeline_();
       var config = claimConfig_(true);
       config.installationScriptId = ScriptApp.getScriptId();
@@ -217,12 +267,13 @@ function prepareClaimEvent() {
 function activateClaimEvent() {
   return claimSetupAction_('Activate form', function (book, sheet) {
     return claimLock_(function () {
-      var settings = claimSetupSettings_(sheet);
+      var settings = claimSetupSettings_(sheet, book);
       var config = claimConfig_(true);
       if (!config.setupWorkbookPrepared) throw new Error('Preparation is incomplete. Choose Prepare event again before activation.');
       var properties = PropertiesService.getScriptProperties();
       if (config.eventCode !== settings.code || config.eventTitle !== settings.title ||
           properties.getProperty('PIPELINE_ASK_CONGREGATION') !== String(settings.ask) ||
+          JSON.stringify(config.categories || []) !== JSON.stringify(settings.categories) ||
           claimParentFolderId_(properties.getProperty('PIPELINE_PARENT_FOLDER_ID')) !== settings.parent) {
         throw new Error('Settings changed. Choose Prepare event / apply settings before activation.');
       }

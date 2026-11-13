@@ -95,3 +95,35 @@ test('duplicate saved receipt numbers are detected before another is allocated',
   store.saveRecord(data); data.id = 'response2'; store.saveRecord(data);
   assert.throws(() => store.records(), /duplicate or invalid/);
 });
+
+test('new category columns preserve the existing register layout and saved category snapshot', () => {
+  const env = fixture(); const store = env.open(); const data = record();
+  Object.assign(data.payload, { category: '=Games', categoryPrefix: 'G', receiptType: 'Hardcopy' });
+  store.saveRecord(data);
+  const rows = env.tabs.get('Claims').data;
+  assert.equal(rows[0][14], 'State JSON');
+  assert.deepEqual(rows[0].slice(15), ['Expense category', 'Category letter', 'Receipt type']);
+  assert.deepEqual(rows[1].slice(15), ['=Games', 'G', 'Hardcopy']);
+  assert.equal(env.open().records()[0].payload.category, '=Games');
+});
+
+test('legacy register headers are extended without rewriting old claim rows and foreign columns stop migration', () => {
+  const env = fixture(); const store = env.open(); store.saveRecord(record());
+  const data = env.tabs.get('Claims').data;
+  data[0].length = 15; data[1].length = 15;
+  const oldRow = JSON.stringify(data[1]);
+  env.open();
+  assert.equal(JSON.stringify(data[1]), oldRow); assert.equal(data[0].length, 18);
+  assert.equal(env.open().records()[0].payload.category, undefined);
+  data[0][15] = 'Finance notes';
+  assert.throws(() => env.open(), /occupied or changed/);
+  assert.equal(data[0][15], 'Finance notes'); assert.equal(JSON.stringify(data[1]), oldRow);
+});
+
+test('legacy register upgrade preserves data under unlabelled extra columns', () => {
+  const env = fixture(); const store = env.open(); store.saveRecord(record());
+  const data = env.tabs.get('Claims').data;
+  data[0].length = 15; data[1][15] = 'Keep this finance note';
+  assert.throws(() => env.open(), /unlabelled data/);
+  assert.equal(data[1][15], 'Keep this finance note'); assert.equal(data[0].length, 15);
+});

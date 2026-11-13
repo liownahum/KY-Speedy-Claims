@@ -11,6 +11,8 @@ This version is a preview. Start with made-up details and sample receipts. A cop
 | I want to… | Go to |
 | --- | --- |
 | Start an event as the finance IC | [Set up an event](#set-up-an-event) |
+| Enter this event's category list | [Set up expense categories](#set-up-expense-categories) |
+| Add a category after the event starts | [Update the expense categories](#update-the-expense-categories) |
 | Claim an expense | [Submit an expense](#submit-an-expense) |
 | Check whether a claim was processed | [Check claims and find receipts](#check-claims-and-find-receipts) |
 | Prepare vouchers for printing | [Create the weekly PDFs](#create-the-weekly-pdfs) |
@@ -24,6 +26,7 @@ If you are the finance IC, have these ready:
 - The Google account you will use to manage the event. Keep using that account for setup and finance tasks.
 - The **blank KY Speedy Claims setup template**, supplied by the person who maintains the system. This guide calls that person your **technical helper**.
 - A short event code, such as **CAMP26**, and an event name, such as **Youth Camp 2026**. Use a different code for each event.
+- The expense categories for this event, with a different letter for each, such as **Games → G** and **Hospitality → H**.
 - Optionally, a Google Drive folder where you want to keep the event's claims. You must be able to add files and folders there.
 - A sample receipt and made-up name and payment details for testing.
 
@@ -58,6 +61,26 @@ In **KY Setup**, enter:
 
 Check the event code and title carefully. **They cannot be changed after you prepare the event.** For another event, make another copy of the blank template.
 
+#### Set up expense categories
+
+The category list belongs to this event. Games, Hospitality and Decor are groups within the same event; everyone still uses the same claim form.
+
+1. Open the **KY Categories** tab at the bottom of your setup spreadsheet.
+2. Starting at **row 6**, enter one category name in the left column and its letter in the right column.
+3. Enter the complete list before you prepare and activate the form.
+
+For example:
+
+| Category name | Letter |
+| --- | --- |
+| Games | G |
+| Hospitality | H |
+| Decor | D |
+
+These are examples; enter the list that suits your event. Another event can use a completely different list. Use one letter from A to Z per category, with no repeated names or letters. The category letter is separate from the event code: **CAMP26** identifies the whole camp, while **G** identifies Games within it. Leave the list empty only if the event does not use expense categories.
+
+When you prepare the event, the form gains two required dropdowns: **Expense category**, using your list, and **Receipt type**, with **Hardcopy** and **E-receipt**. You do not need to add these questions yourself. The letter is saved with the claim for the planned finance-tracker connection; tracker serials such as G1 are not generated yet.
+
 ### 3. Prepare the event
 
 Choose **KY Claims → 1. Prepare event / apply settings**.
@@ -89,6 +112,8 @@ Next, open the form's **Settings → Responses**:
 - Leave **Limit to 1 response** switched **off**, so a person can submit more than one receipt.
 - Check that the people you expect to claim can open and submit the form. Organisation restrictions may prevent people outside your organisation from responding.
 
+If you entered categories, also check that **Expense category** shows your event's list and that **Receipt type** offers **Hardcopy** and **E-receipt**. Both should be required. If the list is wrong, edit KY Categories and run **1. Prepare event / apply settings** again before activating.
+
 Return to KY Setup. Tick **I checked the receipt question** and **I checked responder settings** only after you have checked both. These boxes record your checks; the system cannot check every Google Forms setting for you.
 
 ### 5. Activate the form
@@ -101,10 +126,10 @@ The Stage should change to **Accepting submissions**. If it does not, read **Nex
 
 Before inviting claimants, test the **Claimant form** link under EVENT LINKS. Use made-up details and sample receipt files.
 
-1. Submit a sample expense for **12.50**.
-2. Submit another for **7.25**, using the same Google account and exactly the same name and payment details.
+1. Submit a sample expense for **12.50**. If the category questions appear, choose one of your categories and **Hardcopy**.
+2. Submit another for **7.25**, using the same Google account and exactly the same name and payment details. If available, choose another category and **E-receipt**.
 3. Back in your setup spreadsheet, choose **KY Claims → Refresh status**.
-4. Open **Claims register**, then its **Claims** tab. Both entries should show **DONE**.
+4. Open **Claims register**, then its **Claims** tab. Both entries should show **DONE**. If you used categories, check the **Expense category**, **Category letter** and **Receipt type** against what you selected.
 5. Open the weekly spreadsheet linked from either entry. It should contain two claim rows with a total of **19.75**.
 6. Try [creating the weekly PDFs](#create-the-weekly-pdfs) and check the result.
 
@@ -131,6 +156,8 @@ This section is for anyone claiming an expense.
 | Bank A/c/PayNow | The payment details requested by your finance IC. |
 | Purchase date (YYYY-MM-DD) | The date on the receipt. For example, 4 October 2026 is **2026-10-04**. |
 | Item description | A short, clear description, such as **Stationery for camp games**. The event name is added automatically. |
+| Expense category | Choose the category that best fits the purchase, if this event uses categories. Ask your finance IC if the right option is missing. |
+| Receipt type | Choose **Hardcopy** or **E-receipt** if this question appears. Follow your finance IC's instructions about these terms; either choice still requires uploading a receipt file. |
 | Amount (up to 2 decimal places) | A positive amount such as **12.50**. Do not add a currency symbol or commas. |
 | Congregation | Choose your congregation if the question appears. If it does not appear, **Youth** is used automatically. |
 | Receipt | One image or PDF within the size limit shown on the form. |
@@ -152,6 +179,8 @@ Open your setup spreadsheet and choose **KY Claims → Refresh status**. KY Setu
 | **ERROR** | Processing stopped because something needs attention. | Read **Last error**. Fix the cause or ask your technical helper, then [retry](#retry-incomplete-submissions). |
 
 Use each claim's receipt link to open the filed receipt, or its weekly spreadsheet link to open that person's voucher. You can also open **Claims folder** from KY Setup and find the person's folder. It contains their **Receipts** folder, weekly spreadsheets and exported PDFs.
+
+For events using categories, the register also shows **Expense category**, **Category letter** and **Receipt type**. These record the claimant's choices. They do not change the voucher's existing receipt numbering.
 
 If a response is missing from Claims, it may have been received but rejected before a claim record was created. Check the form's **Responses** tab and ask your technical helper to investigate. The counts in KY Setup cannot show responses that have no claim record yet.
 
@@ -206,6 +235,14 @@ Retrying will not correct a wrong amount or settle conflicting name/payment deta
 
 ## Change event settings
 
+### Update the expense categories
+
+Before activating a new event's form, edit **KY Categories** and choose **KY Claims → 1. Prepare event / apply settings**. The form's category dropdown will use the updated list.
+
+Once the form is active, you can add a category with an unused letter and run Prepare again. Keep existing names and letters unchanged; removing or renaming them could make older responses unclear. Existing claims keep the category and receipt type recorded when they were submitted.
+
+If an older event is already active without category questions, ask your technical helper to review the upgrade. Adding category questions to an existing active or already-used form is not supported automatically. New events should enter the list before activation.
+
 ### Choose the event folder
 
 In KY Setup, paste the new normal Drive folder's link into **Event folder link (optional)**, then choose **KY Claims → 1. Prepare event / apply settings**.
@@ -231,11 +268,15 @@ If someone else will take over an existing event, arrange the handover with your
 | What you see | What to do |
 | --- | --- |
 | No **KY Claims** menu | Open the prepared setup spreadsheet on a computer and reload it. If the menu is still missing, contact your technical helper. |
+| No **KY Categories** tab | Ask your technical helper to install the current version in this same event copy. Then choose **Start / open setup**. Do not replace an existing event with a new copy to work around the problem. |
 | A copied spreadsheet asks you to start setup | Choose **KY Claims → Start / open setup** in your copy. For a new event, use the blank template. |
 | Google asks you to sign in | Use the event's operating account for finance tasks, or your claimant account when submitting a receipt. |
 | The form is closed | Check that the receipt question and responder settings are correct, tick both checks in KY Setup, then choose **2. Activate form**. |
 | Activation asks you to check the receipt or responder settings | Complete [step 4](#4-check-the-form), then tick the two checkboxes in KY Setup. |
 | Activation says settings changed | Choose **1. Prepare event / apply settings**, then try **2. Activate form** again. Event code/title cannot change after preparation. |
+| Category names or letters are repeated | In KY Categories, give each category a different name and a different single letter, then run Prepare again. |
+| A category is missing from the form | Add it in KY Categories, then choose **1. Prepare event / apply settings**. Editing the sheet alone does not change the form. |
+| An active form refuses a category change | Keep existing names and letters. You can add a new category using an unused letter; ask your technical helper about corrections. |
 | Someone cannot open the claim form | Check that they are using the right link and account. Review responder access in the form editor; ask your technical helper if organisation restrictions apply. |
 | A claimant has a confirmation but no Claims entry | Check the form's Responses tab. Ask your technical helper to investigate; do not ask the claimant to submit the same expense again yet. |
 | A claim says name or payment details conflict | Compare this week's entries with the claimant. Ask finance and your technical helper how to correct it; retry alone will not fix it. |
@@ -257,3 +298,5 @@ This preview supports one event per setup spreadsheet and one receipt file per f
 Very long item descriptions can stop voucher processing and affect later claims for that person in the same week. Keep descriptions brief and contact your technical helper if this occurs; repeatedly retrying does not fix the text.
 
 The copied-workbook workflow has passed testing with one operating Google account. Independent setup by another finance IC, multi-person PDF batches, access across accounts and simultaneous submissions still need further checks. See the [validation record](live-validation.md) for the exact evidence. Agree the remaining date, correction and printing requirements with finance before official use.
+
+The new event-specific category and receipt-type fields have local automated test coverage; their full Google submission path still needs a separate live check. Connecting to your existing finance tracker, generating its G1/H1-style serials and preserving its Reimbursed by entries are the next integration work, after the tracker layout has been reviewed.

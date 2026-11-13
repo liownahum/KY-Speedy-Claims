@@ -95,7 +95,7 @@ The architecture diagram shows calls/responsibilities between JavaScript modules
 | Voucher planning | [VoucherCore.js](../src/VoucherCore.js): `plan`, `literal`, `pdfQuery` | Integer-cent totals, worksheet/print coordinates, literal text, row sizing, and PDF query settings. |
 | Voucher rendering/export | [Voucher.gs](../src/Voucher.gs): `VoucherRenderer.render`, `exportPdf`, `templateOptions` | Validate the official layout, resize/fill a disposable worksheet, verify totals, and save valid PDF responses. |
 | Prototype/import support | [Prototype.gs](../src/Prototype.gs): `runVoucherPrototype`, `prototypeXlsxImporter_` | Synthetic renderer checks and Drive v2/v3 XLSX import selection. |
-| Guided setup | [SetupWorkbook.gs](../src/SetupWorkbook.gs): `onOpen`, setup/activation/status/retry/export menu actions | Bind a copied controller to its own project, adapt editable event settings, require form checks, and display links/results. |
+| Guided setup | [SetupWorkbook.gs](../src/SetupWorkbook.gs): `onOpen`, setup/activation/status/retry/export menu actions | Bind a copied controller to its own project, adapt editable event/category settings, require form checks, and display links/results. |
 
 `ClaimCore`, `ClaimProcessor`, and `VoucherCore` are JavaScript modules shared with Node. Their CommonJS export guards are inactive in Apps Script. Other `.gs` modules rely on Apps Script globals. The fixed bundle order makes those globals available together in `Code.gs`.
 
@@ -184,8 +184,15 @@ The guided workbook manages these properties from its editable fields. For stand
 | `PIPELINE_PARENT_FOLDER_ID` | Existing normal Drive folder ID or full folder URL. | Create the root in My Drive for a new installation; retain its current location for an existing one. |
 | `PIPELINE_ASK_CONGREGATION` | `true` shows the required dropdown; false/blank/null/missing assigns Youth. | Youth, without a question. |
 | `PIPELINE_TEMPLATE_ID` | Approved pristine template file ID, not a full URL. | `PROTOTYPE_TEMPLATE_ID` if present, otherwise the built-in official master. |
+| `PIPELINE_CATEGORIES` | JSON array of `{name, prefix}` entries; unique case-insensitive names, unique single A–Z letters. | No category/receipt-type questions. Guided setup fills this from KY Categories. |
 
 Event code/title are immutable after initial configuration. Internal configuration/cursor/binding properties must not be used as operator inputs or removed to restart an event.
+
+Category names are trimmed and limited to 80 characters; letters are trimmed and uppercased. The normalised JSON is limited to 4,000 UTF-8 bytes to leave room for installation metadata in the [9 KB property value limit](https://developers.google.com/apps-script/guides/services/quotas). Blank table rows are ignored; partial rows and duplicate names/letters fail before settings are written. Category and receipt-type questions use required [ListItem choices](https://developers.google.com/apps-script/reference/forms/list-item). They are matched by saved ID or unique title for setup recovery; ambiguous or incorrectly typed questions stop for review.
+
+Before activation, mappings can be revised. Active mappings allow additions only, preserving existing exact name/letter pairs so unreserved responses remain interpretable. Enabling categories on an already-active legacy form, or an inactive form that already has responses, stops for migration review. Adding a property alone does not change submission interpretation: `config.categories` is the applied snapshot. New claims validate and retain category/name/receipt type in their canonical payload; retries of reserved claims keep that snapshot. Global receipt numbers, official voucher layout, and receipt filenames remain unchanged. Tracker SN allocation and external-sheet sync are not implemented by this extension.
+
+KY Categories is an owned worksheet with J1 marker/J2 BUILDING–READY layout state. Same-event reopening preserves the table; initialising a true copy clears event-specific rows and the recognised category property along with other copied configuration. A foreign worksheet using the reserved name blocks reset. The register extends the existing fifteen columns with Expense category / Category letter / Receipt type at P:R, retaining State JSON at O and old rows without backfill. Foreign headers or unlabelled data in those columns stop migration rather than being overwritten.
 
 `claimParentFolderId_` accepts a folder ID or a normal HTTPS Drive folder URL, including account-specific `/drive/u/N/folders/` links. `claimDestinationFolder_` requests Advanced Drive metadata, requires a folder with `capabilities.canAddChildren`, rejects a populated `driveId`, and rejects trashed destinations. These fields are supported by the existing Drive service versions used here.
 
@@ -352,7 +359,7 @@ npm run bundle -- --pipeline
 npm run bundle -- --installer
 ```
 
-The current suite has 150 individual tests across ten files. Some environments report only ten file-level results for `npm test`; run a file directly to see its individual cases, for example `node test/setup-workbook.test.js`.
+The current suite has 167 individual tests across ten files. Some environments report only ten file-level results for `npm test`; run a file directly to see its individual cases, for example `node test/setup-workbook.test.js`.
 
 | Test file | Principal coverage |
 | --- | --- |

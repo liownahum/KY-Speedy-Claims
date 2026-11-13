@@ -8,6 +8,8 @@ KY Speedy Claims helps an event's finance IC collect receipt submissions, organi
 
 A [guided Setup Workbook preview](docs/setup-workbook.md) now implements this setup/menu interface. Its copied-workbook workflow passed native testing under one account; an independent finance IC's installation remains to be tested. A maintainer installs its bound script once in a blank template; finance ICs then use their own copies. Follow the [User Guide](docs/UserGuide.md) for the workbook workflow, or the [standalone test guide](docs/form-pipeline-test.md) for an existing script-based installation.
 
+The new **KY Categories** tab accepts each event's category names and letters. Prepare uses this list for required Expense category and Receipt type dropdowns and retains their values with each claim. This extension has local test coverage; the earlier native run does not validate its new submission fields. Connecting an existing finance tracker and assigning its category serials remain separate work.
+
 1. A finance IC copies the setup workbook, enters event settings, and authorises setup.
 2. Setup prepares the event's folders, submission form, registers, template copy, and automatic processing.
 3. A claimant submits claim details and a receipt through Google Forms.

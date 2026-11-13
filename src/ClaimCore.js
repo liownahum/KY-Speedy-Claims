@@ -27,6 +27,34 @@ var ClaimCore = (function () {
     parsed.setUTCDate(parsed.getUTCDate() - (parsed.getUTCDay() + 6) % 7);
     return parsed.toISOString().slice(0, 10);
   }
+  function categories(values) {
+    if (!Array.isArray(values)) throw new Error('Enter categories as a list of names and letters.');
+    var names = new Set();
+    var prefixes = new Set();
+    var result = values.map(function (value) {
+      if (!value || typeof value !== 'object') throw new Error('Each category needs a name and a letter.');
+      var name = text(value.name, 'Category name', 80);
+      var prefix = text(value.prefix, 'Category letter').toUpperCase();
+      if (!/^[A-Z]$/.test(prefix)) throw new Error('Use one letter from A to Z for each category.');
+      if (names.has(name.toLowerCase())) throw new Error('Category names must be different: ' + name);
+      if (prefixes.has(prefix)) throw new Error('Each category needs a different letter: ' + prefix);
+      names.add(name.toLowerCase()); prefixes.add(prefix);
+      return { name: name, prefix: prefix };
+    });
+    // Reserve room for resource IDs and other settings in the same project property.
+    if (encodeURIComponent(JSON.stringify(result)).replace(/%[A-F0-9]{2}/g, 'x').length > 4000) {
+      throw new Error('The category list is too long. Shorten the category names.');
+    }
+    return result;
+  }
+  function categoryChanges(previous, next, active) {
+    if (!active) return;
+    (previous || []).forEach(function (old) {
+      if (!next.some(function (value) { return value.name === old.name && value.prefix === old.prefix; })) {
+        throw new Error('The form is active. Keep existing category names and letters; you may add new categories with unused letters.');
+      }
+    });
+  }
   function normalize(input, config) {
     if (!input || !config) throw new Error('Submission and event configuration are required.');
     var email = text(input.email, 'Collected email', 254).toLowerCase();
@@ -38,7 +66,13 @@ var ClaimCore = (function () {
     if (!Array.isArray(input.fileIds) || input.fileIds.length !== 1 || typeof input.fileIds[0] !== 'string' || !/^[\w-]+$/.test(input.fileIds[0])) {
       throw new Error('Upload exactly one receipt image or PDF for each submission.');
     }
-    return {
+    var category = null;
+    if (config.categories && config.categories.length) {
+      category = config.categories.find(function (value) { return value.name === input.category; });
+      if (!category) throw new Error('Choose an expense category from this event\'s form.');
+      if (['Hardcopy', 'E-receipt'].indexOf(input.receiptType) === -1) throw new Error('Choose Hardcopy or E-receipt for the receipt type.');
+    }
+    var normalized = {
       id: text(input.id, 'Response ID'), personKey: email,
       submittedAt: submitted.toISOString(), week: monday(input.localSubmittedDate),
       payload: {
@@ -48,6 +82,12 @@ var ClaimCore = (function () {
         congregation: congregation, amountCents: money(input.amount), receiptFileId: input.fileIds[0]
       }
     };
+    if (category) {
+      normalized.payload.category = category.name;
+      normalized.payload.categoryPrefix = category.prefix;
+      normalized.payload.receiptType = input.receiptType;
+    }
+    return normalized;
   }
   function nextReceipt(records) {
     var ids = new Set();
@@ -90,6 +130,6 @@ var ClaimCore = (function () {
     var fallback = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/webp': 'webp' };
     return String(number) + '.' + (extension ? extension[1].toLowerCase() : fallback[mimeType] || 'img');
   }
-  return { normalize: normalize, money: money, monday: monday, nextReceipt: nextReceipt, weekKey: weekKey, weeklyPayload: weeklyPayload, receiptFilename: receiptFilename };
+  return { normalize: normalize, categories: categories, categoryChanges: categoryChanges, money: money, monday: monday, nextReceipt: nextReceipt, weekKey: weekKey, weeklyPayload: weeklyPayload, receiptFilename: receiptFilename };
 }());
 if (typeof module !== 'undefined') module.exports = ClaimCore;

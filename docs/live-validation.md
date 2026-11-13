@@ -78,11 +78,23 @@ After the user requested simpler deployment, a separate private blank spreadshee
 
 All 150 individual local tests across ten files passed with this source, including 17 installer tests. The preview needs independent second-IC acceptance before the guided-setup milestone is closed. It does not fix the known long-description failure or settle production correction/date policies.
 
+## Event category setup extension — 13 November 2026
+
+The user requested categories that vary by event, entered during setup. The version 0.2.0-preview.2 extension adds KY Categories, category/letter validation, required Expense category and Receipt type questions, stored choices, and visible register columns P:R. All 167 individual local tests across ten files pass. Tests cover independent lists, invalid/partial/duplicate input, active mapping protection and additions, question reuse, response validation, snapshot retention on retry, copied-table reset, and register migration without overwriting foreign data.
+
+- Installed blank-template bundle fingerprint: `d1557c376123e77e5b0dfd25d10ddad417436ec7dcc810fec3d4b3146f4aa10c`.
+- The installed 81,532-character Code.gs was copied back through the editor and matched the supplied bundle after newline normalisation. The manifest/scopes were unchanged.
+- Native initialisation exposed a chained `setFrozenRows(...).hideColumns(...)` error: setFrozenRows returned no sheet. The calls were separated and the local substitute was corrected to return void. Reopening setup then completed successfully from the interrupted BUILDING layout.
+- In Google Sheets, the assistant observed the category-name/letter table, instructions and empty blue input rows. KY Setup showed version 0.2.0-preview.2, blank event settings/links and zero claim counts. The distribution template remained unconfigured and private. Screenshots and copied ranges were retained outside the repository.
+
+This is native layout/initialisation evidence only. No new category-enabled form was prepared or submitted in this run; category/receipt-type dropdown delivery and their end-to-end Google persistence still need live validation. Earlier native submission results above apply to their attributed older builds. No finance-tracker sync or G1/H1 serial allocation is implemented yet.
+
 ## Remaining work
 
 These confirmations do not validate the complete claims workflow. Still outstanding:
 
 - Multi-person batch PDF export, skipping people with no current-week claims, and per-person failure isolation.
+- Category-enabled form creation, category/receipt-type submission and saved results in Google, plus the external finance-tracker integration once its layout is available.
 - Receipt-upload ownership and permissions across accounts, plus independent installations under another account and copies of already-configured controllers.
 - Recovery at additional failure boundaries, including timeouts and uncertain acknowledgements; the missing-template case above is narrower evidence.
 - Native week-boundary evidence, including Monday midnight in Singapore and reuse across different weeks.

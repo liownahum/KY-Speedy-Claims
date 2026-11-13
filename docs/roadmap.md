@@ -69,6 +69,7 @@ Acceptance scenarios:
 Implementation on 13 November 2026: a bound-workbook preview now provides event inputs, form-setting acknowledgements, preparation/activation/status menus, retry/export results, and safeguards against inherited event IDs in a copy. All 150 local tests pass. A copy of the private blank native template passed preparation, activation, a browser claim, status, empty retry, and PDF export using one account. The template stayed blank. This is not a public distribution or a second-IC installation pass. See the [guided setup guide](setup-workbook.md).
 
 - Provide event inputs in the Setup Workbook.
+- Enter a per-event category/letter list in KY Categories. The form's required category and receipt-type choices and stored snapshots are implemented with local tests; native submission acceptance is outstanding. External finance-tracker mapping and category serial allocation still need the tracker layout and mapping review.
 - Create/configure the event folder, template copy, registers, response destination, form, and triggers.
 - Let the IC enter an existing normal Drive event-folder link as the parent location. Both initial guided preparation with an own-account parent and existing-root relocation were exercised natively. Shared-folder access and a visual folder picker remain to be validated/built.
 - Save resource IDs, settings, and software/template versions for that installation.

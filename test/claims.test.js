@@ -219,3 +219,40 @@ test('corrupt or duplicate register identities prevent number allocation', () =>
   assert.throws(() => core.nextReceipt([item, item]));
   assert.throws(() => core.nextReceipt([item, { id: 'r2', receiptNumber: 1 }]));
 });
+
+test('each event normalises its own distinct category names and letters', () => {
+  assert.deepEqual(core.categories([{ name: ' Games ', prefix: ' g ' }, { name: 'Hospitality', prefix: 'h' }]), [
+    { name: 'Games', prefix: 'G' }, { name: 'Hospitality', prefix: 'H' }
+  ]);
+  assert.deepEqual(core.categories([{ name: 'Transport', prefix: 'G' }]), [{ name: 'Transport', prefix: 'G' }]);
+  for (const values of [null, [{ name: '', prefix: 'G' }], [{ name: 'Games', prefix: '' }],
+    [{ name: 'Games', prefix: 'G1' }], [{ name: 'Games', prefix: 'AB' }],
+    [{ name: 'Games', prefix: 'G' }, { name: 'games', prefix: 'H' }],
+    [{ name: 'Games', prefix: 'G' }, { name: 'Decor', prefix: 'g' }]]) {
+    assert.throws(() => core.categories(values));
+  }
+  assert.throws(() => core.categories(Array.from({ length: 26 }, (_, index) => ({ name: String.fromCharCode(65 + index) + '界'.repeat(79), prefix: String.fromCharCode(65 + index) }))), /too long/);
+});
+
+test('active category mappings permit additions but prohibit removal, renaming and reused letters', () => {
+  const initial = core.categories([{ name: 'Games', prefix: 'G' }]);
+  assert.doesNotThrow(() => core.categoryChanges(initial, [...initial, { name: 'Decor', prefix: 'D' }], true));
+  for (const next of [[], [{ name: 'Games', prefix: 'D' }], [{ name: 'Gaming', prefix: 'G' }]]) {
+    assert.throws(() => core.categoryChanges(initial, next, true), /Keep existing/);
+    assert.doesNotThrow(() => core.categoryChanges(initial, next, false));
+  }
+});
+
+test('category and receipt type are validated and snapshotted without changing legacy input', () => {
+  const settings = { ...config, categories: core.categories([{ name: 'Games', prefix: 'G' }]) };
+  const data = { ...input(), category: 'Games', receiptType: 'Hardcopy' };
+  const claim = core.normalize(data, settings);
+  assert.equal(claim.payload.category, 'Games');
+  assert.equal(claim.payload.categoryPrefix, 'G');
+  assert.equal(claim.payload.receiptType, 'Hardcopy');
+  assert.equal(core.normalize({ ...data, receiptType: 'E-receipt' }, settings).payload.receiptType, 'E-receipt');
+  for (const override of [{ category: undefined }, { category: 'Other' }, { receiptType: undefined }, { receiptType: 'Photo' }]) {
+    assert.throws(() => core.normalize({ ...data, ...override }, settings));
+  }
+  assert.equal(core.normalize(data, config).payload.category, undefined);
+});
