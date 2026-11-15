@@ -10,7 +10,7 @@ function environment() {
   const book = fixture().workbook;
   book.sheets.clear(); book.id = 'book-A';
   const properties = new Map(); const effects = []; const menus = [];
-  const env = { scriptId: 'script-A', locked: false, failPrepare: false, records: [] };
+  const env = { scriptId: 'script-A', locked: false, failPrepare: false, records: [], prompts: [], alerts: [] };
   const insert = book.insertSheet.bind(book);
   book.insertSheet = name => {
     const sheet = insert(name); sheet.maxRows = 1000;
@@ -41,10 +41,19 @@ function environment() {
   book.setActiveSheet = sheet => { book.active = sheet; return sheet; };
   book.toast = (message, title) => effects.push(['toast', title, message]);
   const menu = { addItem(label, handler) { menus.push([label,handler]); return this; }, addSeparator() {return this;}, addToUi() {return this;} };
+  const ui = {
+    createMenu: () => menu, Button: { OK: 'OK', YES: 'YES' }, ButtonSet: { OK_CANCEL: 'OK_CANCEL', YES_NO: 'YES_NO' },
+    prompt(...args) {
+      assert.equal(env.locked, false, 'prompts must never hold the lock'); env.prompts.push(args);
+      const reply = env.replies.shift();
+      return { getSelectedButton: () => reply.button, getResponseText: () => reply.text };
+    },
+    alert(...args) { assert.equal(env.locked, false); env.alerts.push(args); return env.confirm || 'NO'; }
+  };
   const context = vm.createContext({
     ClaimCore: require('../src/ClaimCore.js'),
     VoucherCore, console:{log(){},error(){}},
-    SpreadsheetApp: { getActiveSpreadsheet: () => book, getUi: () => ({createMenu: () => menu}), openById: () => ({}) },
+    SpreadsheetApp: { getActiveSpreadsheet: () => book, getUi: () => ui, openById: () => ({}) },
     PropertiesService: {getScriptProperties: () => ({
       getProperty: key => properties.get(key) ?? null,
       setProperty(key,value) {properties.set(key,value); return this;},
@@ -88,7 +97,7 @@ function environment() {
 
 test('opening adds menu actions without creating resources or configuration',()=>{
   const env=environment();env.context.onOpen();
-  assert.deepEqual(env.menus.map(item=>item[1]),['initializeClaimSetupWorkbook','prepareClaimEvent','activateClaimEvent','refreshClaimSetup','retryClaimEvent','exportClaimEvent']);
+  assert.deepEqual(env.menus.map(item=>item[1]),['initializeClaimSetupWorkbook','prepareClaimEvent','activateClaimEvent','refreshClaimSetup','retryClaimEvent','cancelClaimEvent','exportClaimEvent']);
   assert.equal(env.properties.size,0);assert.equal(env.book.sheets.size,0);assert.equal(env.effects.length,0);
 });
 test('initialisation is repeatable and retains edited settings and unrelated tabs',()=>{
@@ -96,6 +105,8 @@ test('initialisation is repeatable and retains edited settings and unrelated tab
   env.init();env.settings();env.init();
   assert.equal(env.sheet().getRange('B5').getValue(),'CAMP26');assert.equal(env.book.sheets.size,4);
   assert.equal(env.book.getSheetByName('Finance notes').getRange('A1').getValue(),'Keep');
+  env.sheet().getRange('B33').setValue('');env.init();
+  assert.equal(env.sheet().getRange('B33').getValue(),0);
 });
 test('invalid settings do not create resources or write pipeline properties',()=>{
   for(const [code,title] of [['','Camp'],['bad code','Camp'],['CAMP26','']]){
@@ -138,7 +149,7 @@ test('an interrupted preparation cannot be activated until preparation finishes'
 test('copied workbooks cannot prepare, retry, export or use inherited core configuration before initialisation',()=>{
   const env=environment();env.init();env.settings();env.context.prepareClaimEvent();
   env.book.id='book-B';env.scriptId='script-B';
-  for(const action of ['prepareClaimEvent','retryClaimEvent','exportClaimEvent']) assert.equal(env.context[action]().status,'ERROR');
+  for(const action of ['prepareClaimEvent','retryClaimEvent','cancelClaimEvent','exportClaimEvent']) assert.equal(env.context[action]().status,'ERROR');
   assert.throws(()=>env.context.claimConfig_(false),/copied setup workbook/);
   assert.equal(env.effects.filter(call=>['prepare','retry','export'].includes(call[0])).length,1);
 });
@@ -256,4 +267,55 @@ test('an interrupted category-table layout is completed by reopening setup',()=>
   env.book.getSheetByName('KY Categories').getRange('J2').setValue('BUILDING');
   env.settings();assert.match(env.context.prepareClaimEvent().error,/category table is incomplete/);
   env.init();assert.equal(env.book.getSheetByName('KY Categories').getRange('J2').getValue(),'READY');
+});
+
+test('status counts cancelled claims separately and includes pending voucher repairs as incomplete', () => {
+  const env=environment(); env.init(); env.settings(); env.context.prepareClaimEvent();
+  env.records=[{status:'DONE'}, {status:'ERROR'}, {status:'CANCELLED',cancellation:{pending:false}}, {status:'CANCELLED',cancellation:{pending:true}}];
+  env.context.refreshClaimSetup();
+  assert.equal(env.sheet().getRange('B24').getValue(),1);
+  assert.equal(env.sheet().getRange('B25').getValue(),2);
+  assert.equal(env.sheet().getRange('B33').getValue(),2);
+});
+
+test('cancel menu previews the exact claim, requires a reason and confirmation, then displays the result', () => {
+  const env=environment(); env.init(); env.settings(); env.context.prepareClaimEvent();
+  env.records=[{id:'r1',receiptNumber:1,reference:'CAMP26-000001',week:'2026-11-09',status:'DONE',weeklyFileId:'week',payload:{fullName:'SAMPLE',amountCents:1250,description:'Printing'}}];
+  env.replies=[{button:'OK',text:'000001'},{button:'OK',text:' Wrong amount '}]; env.confirm='YES';
+  env.context.cancelClaimSubmission=(number, reason)=>{
+    assert.equal(number,1); assert.equal(reason,'Wrong amount');
+    const record=env.records[0]; record.status='CANCELLED'; record.cancellation={reason,pending:false}; return record;
+  };
+  assert.equal(env.context.cancelClaimEvent().status,'CANCELLED');
+  assert.match(env.alerts[0][1],/CAMP26-000001\nSAMPLE/);
+  assert.match(env.alerts[0][1],/SGD 12.50/); assert.match(env.alerts[0][1],/Wrong amount/);
+  const results=env.book.getSheetByName('KY Results');
+  assert.equal(results.getRange('C6').getValue(),'CANCELLED');
+  assert.equal(results.getRange('H6').getValue(),'Wrong amount');
+  assert.match(results.getRange('A2').getValue(),/replace any previously prepared or submitted voucher/);
+});
+
+test('cancel menu closes and declined confirmations produce no cancellation', () => {
+  for (const replies of [
+    [{button:'CANCEL',text:''}],
+    [{button:'OK',text:'1'},{button:'CANCEL',text:''}],
+    [{button:'OK',text:'1'},{button:'OK',text:'Wrong amount'}]
+  ]) {
+    const env=environment(); env.init(); env.settings(); env.context.prepareClaimEvent();
+    env.records=[{id:'r1',receiptNumber:1,reference:'CAMP26-000001',week:'2026-11-09',status:'DONE',payload:{fullName:'SAMPLE',amountCents:1250,description:'Printing'}}];
+    env.replies=replies;
+    env.context.cancelClaimSubmission=()=>assert.fail('Must not cancel');
+    assert.equal(env.context.cancelClaimEvent().status,'ABORTED');
+    assert.equal(env.records[0].status,'DONE');
+  }
+});
+
+test('cancel menu refuses blank reasons and already-cancelled claims', () => {
+  const env=environment(); env.init(); env.settings(); env.context.prepareClaimEvent();
+  env.records=[{id:'r1',receiptNumber:1,status:'DONE'}];
+  env.replies=[{button:'OK',text:'1'},{button:'OK',text:'  '}];
+  assert.match(env.context.cancelClaimEvent().error,/reason/);
+  env.records[0].status='CANCELLED'; env.replies=[{button:'OK',text:'1'}];
+  assert.match(env.context.cancelClaimEvent().error,/already cancelled/);
+  assert.equal(env.alerts.length,0);
 });

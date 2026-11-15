@@ -106,10 +106,10 @@ var ClaimCore = (function () {
   function weekKey(record) { return record.personKey + '|' + record.week; }
   function weeklyPayload(records, current, config) {
     var matching = records.filter(function (record) {
-      return record.personKey === current.personKey && record.week === current.week && record.receiptsReady;
+      return record.personKey === current.personKey && record.week === current.week && record.receiptsReady && record.status !== 'CANCELLED';
     }).sort(function (a, b) { return a.receiptNumber - b.receiptNumber; });
-    if (!matching.length) throw new Error('No receipt-ready claims for this week.');
-    var first = matching[0].payload;
+    // An empty payload replaces the old voucher with a non-payable notice.
+    var first = matching.length ? matching[0].payload : current.payload;
     matching.forEach(function (record) {
       if (record.payload.fullName !== first.fullName || record.payload.paymentDetails !== first.paymentDetails) {
         throw new Error('Name/payment details conflict within this week; finance review is required.');

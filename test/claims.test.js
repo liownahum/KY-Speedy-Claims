@@ -48,9 +48,15 @@ function environment() {
       calls.push('render');
       rendered.set(week.fileId, clone(payload));
       maybeFail('render');
+    },
+    rebuildCancelledWeek(record, payload) {
+      const week = weeks.get(core.weekKey(record));
+      if (week) this.renderWeek(week, payload);
     }
   };
   env.process = data => processor.process(data, config, store, ports);
+  env.cancel = (id, reason = 'Incorrect amount', actor = 'admin@example.com') => processor.cancel(id, reason, actor, config, store, ports);
+  env.repair = id => processor.repairCancellation(store.records().find(item => item.id === id), config, store, ports);
   return env;
 }
 
@@ -255,4 +261,100 @@ test('category and receipt type are validated and snapshotted without changing l
     assert.throws(() => core.normalize({ ...data, ...override }, settings));
   }
   assert.equal(core.normalize(data, config).payload.category, undefined);
+});
+
+test('cancellation keeps the original claim and receipt while rebuilding only active totals', () => {
+  const env = environment();
+  const original = env.process(input('r1'));
+  env.process({ ...input('r2'), amount: '7.25' });
+  env.process(input('other', 'b@example.com'));
+  const files = clone([...env.files]);
+  const cancelled = env.cancel('r1', '  Incorrect amount  ');
+  assert.equal(cancelled.status, 'CANCELLED');
+  assert.deepEqual(cancelled.payload, original.payload);
+  assert.equal(cancelled.receiptNumber, 1);
+  assert.equal(cancelled.receiptUrl, original.receiptUrl);
+  assert.equal(cancelled.weeklyFileId, original.weeklyFileId);
+  assert.equal(cancelled.cancellation.reason, 'Incorrect amount');
+  assert.equal(cancelled.cancellation.by, 'admin@example.com');
+  assert.ok(Number.isFinite(Date.parse(cancelled.cancellation.at)));
+  assert.equal(cancelled.cancellation.pending, false);
+  assert.deepEqual([...env.files], files);
+  assert.deepEqual(env.rendered.get('week-0').claims.map(item => item.receiptNumber), [2]);
+  assert.equal(env.rendered.get('week-0').claims[0].amountCents, 725);
+  assert.equal(env.rendered.get('week-1').claims.length, 1);
+  assert.equal(env.process(input('replacement')).receiptNumber, 4);
+});
+
+test('cancellation is permanent and repeated requests preserve the original audit and number', () => {
+  const env = environment(); env.process(input('r1')); env.cancel('r1');
+  const saved = clone(env.records.get('r1'));
+  const calls = env.calls.length;
+  assert.deepEqual(env.process(input('r1')), saved);
+  assert.deepEqual(env.cancel('r1', 'Different reason', 'other@example.com'), saved);
+  assert.equal(env.calls.length, calls);
+  assert.throws(() => env.process({ ...input('r2'), fileIds: ['file-r1'] }), /already linked/);
+});
+
+test('cancelling the last claim produces an empty active week and replacement starts at a new number', () => {
+  const env = environment(); env.process(input('r1')); env.cancel('r1');
+  assert.deepEqual(env.rendered.get('week-0').claims, []);
+  env.process(input('r2'));
+  assert.deepEqual(env.rendered.get('week-0').claims.map(item => item.receiptNumber), [2]);
+});
+
+test('invalid reasons and unknown claim IDs have no cancellation effects', () => {
+  const env = environment(); env.process(input('r1'));
+  const original = clone(env.records.get('r1')); const calls = env.calls.length;
+  for (const reason of ['', '  ', 'a'.repeat(501), null]) assert.throws(() => env.cancel('r1', reason), /reason/);
+  assert.throws(() => env.cancel('unknown'), /not found/);
+  assert.deepEqual(env.records.get('r1'), original);
+  assert.equal(env.calls.length, calls);
+});
+
+test('failed cancellation rendering remains CANCELLED and canonical retry repairs it without changing the audit', () => {
+  const env = environment(); env.process(input('r1')); env.process(input('r2'));
+  env.failure = 'render';
+  assert.throws(() => env.cancel('r1'), /cancelled; voucher update pending/);
+  const saved = clone(env.records.get('r1'));
+  assert.equal(saved.status, 'CANCELLED'); assert.equal(saved.cancellation.pending, true);
+  assert.equal(env.process(input('r1')).status, 'CANCELLED');
+  const repaired = env.repair('r1');
+  assert.deepEqual(repaired.cancellation, { ...saved.cancellation, pending: false });
+  assert.equal(repaired.error, '');
+  assert.deepEqual(env.rendered.get('week-0').claims.map(item => item.receiptNumber), [2]);
+});
+
+test('lost cancellation reservation acknowledgement leaves a recoverable exclusion before voucher effects', () => {
+  const env = environment(); env.process(input('r1'));
+  const save = env.store.saveRecord; let fail = true;
+  env.store.saveRecord = record => { save(record); if (fail) { fail = false; throw new Error('Acknowledgement lost'); } };
+  assert.throws(() => env.cancel('r1'), /Acknowledgement/);
+  assert.equal(env.records.get('r1').status, 'CANCELLED');
+  assert.equal(env.records.get('r1').cancellation.pending, true);
+  assert.equal(env.rendered.get('week-0').claims.length, 1);
+  env.repair('r1'); assert.equal(env.rendered.get('week-0').claims.length, 0);
+});
+
+test('cancellation completion write failure can be repaired without reviving the claim', () => {
+  const env = environment(); env.process(input('r1'));
+  const save = env.store.saveRecord; let fail = true;
+  env.store.saveRecord = record => {
+    save(record);
+    if (record.cancellation && !record.cancellation.pending && fail) { fail = false; throw new Error('Completion failed'); }
+  };
+  assert.throws(() => env.cancel('r1'), /Completion failed/);
+  assert.equal(env.records.get('r1').status, 'CANCELLED');
+  env.repair('r1'); assert.equal(env.records.get('r1').cancellation.pending, false);
+  assert.equal(env.rendered.get('week-0').claims.length, 0);
+});
+
+test('a failed claim can be cancelled before any receipt or workbook exists', () => {
+  const env = environment(); env.process(input('r1'));
+  const bad = { ...input('r2'), paymentDetails: 'WRONG DETAILS' };
+  assert.throws(() => env.process(bad), /conflict/);
+  env.cancel('r2');
+  assert.equal(env.files.has('file-r2'), false);
+  assert.deepEqual(env.rendered.get('week-0').claims.map(item => item.receiptNumber), [1]);
+  assert.equal(env.records.get('r2').status, 'CANCELLED');
 });

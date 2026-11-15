@@ -132,6 +132,7 @@ class Sheet {
   getColumnWidth(col) { return col === 6 ? 200 : 80; }
   getRowHeight(row) { return this.rowHeights.get(row) || 24; }
   setRowHeight(row, height) { this.rowHeights.set(row, height); }
+  setColumnWidth(col, width) { return this; }
   setFrozenRows(count) { this.frozenRows = count; }
   getSheetId() { return 123; }
   hideSheet() { this.hidden = true; }

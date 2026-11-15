@@ -28,6 +28,19 @@ function claimStore_(spreadsheet) {
     })) throw new Error('Claims category columns contain unlabelled data. Ask the maintainer to review columns P to R.');
   }
   if (JSON.stringify(existingCategoryHeaders) !== JSON.stringify(categoryHeaders)) categoryHeaderRange.setValues([categoryHeaders]);
+  var cancellationHeaders = ['Cancellation reason', 'Cancelled at (UTC)', 'Cancelled by', 'Cancellation voucher update'];
+  var cancellationRange = claims.getRange(1, 19, 1, cancellationHeaders.length);
+  var existingCancellationHeaders = cancellationRange.getValues()[0];
+  if (existingCancellationHeaders.some(function (value, index) { return value !== '' && value !== cancellationHeaders[index]; })) {
+    throw new Error('Claims cancellation columns are occupied or changed. Ask the maintainer to review columns S to V.');
+  }
+  if (existingCancellationHeaders.some(function (value) { return value === ''; }) && claims.getLastRow() > 1) {
+    var cancellationValues = claims.getRange(2, 19, claims.getLastRow() - 1, cancellationHeaders.length).getValues();
+    if (cancellationValues.some(function (row) {
+      return row.some(function (value, index) { return existingCancellationHeaders[index] === '' && value !== ''; });
+    })) throw new Error('Claims cancellation columns contain unlabelled data. Ask the maintainer to review columns S to V.');
+  }
+  if (JSON.stringify(existingCancellationHeaders) !== JSON.stringify(cancellationHeaders)) cancellationRange.setValues([cancellationHeaders]);
   claims.getRange('J:J').setNumberFormat('0.00');
   claims.hideColumns(15);
   sheet('People', ['Key', 'State JSON']);
@@ -55,7 +68,9 @@ function claimStore_(spreadsheet) {
     records: records,
     saveRecord: function (record) {
       var p = record.payload;
+      var cancellation = record.cancellation;
       var values = [record.id, record.receiptNumber, record.reference, new Date(record.submittedAt), record.week, p.email, p.fullName, p.description, p.congregation, p.amountCents / 100, record.status, record.receiptUrl || '', record.weeklyFileId ? 'https://docs.google.com/spreadsheets/d/' + record.weeklyFileId + '/edit' : '', record.error || '', JSON.stringify(record), p.category || '', p.categoryPrefix || '', p.receiptType || ''];
+      values = values.concat(cancellation ? [cancellation.reason, cancellation.at, cancellation.by || 'Not recorded', cancellation.pending ? 'PENDING' : 'UPDATED'] : ['', '', '', '']);
       put(claims, record.id, values.map(function (value) { return typeof value === 'string' ? VoucherCore.literal(value) : value; }));
     },
     getMeta: function (name, key) {

@@ -1,5 +1,5 @@
 /** Bound-spreadsheet interface. Each copied workbook must own a separate script project. */
-var KY_SETUP_VERSION_ = '0.2.0-preview.2';
+var KY_SETUP_VERSION_ = '0.2.0-preview.3';
 var KY_SETUP_SHEET_ = 'KY Setup';
 var KY_RESULTS_SHEET_ = 'KY Results';
 var KY_CATEGORIES_SHEET_ = 'KY Categories';
@@ -20,6 +20,7 @@ function onOpen() {
     .addItem('Refresh status', 'refreshClaimSetup')
     .addSeparator()
     .addItem('Retry incomplete submissions', 'retryClaimEvent')
+    .addItem('Cancel claim', 'cancelClaimEvent')
     .addItem('Export current-week PDFs', 'exportClaimEvent')
     .addToUi();
 }
@@ -69,7 +70,7 @@ function claimSetupCategoriesSheet_(book, reset) {
       ['EVENT EXPENSE CATEGORIES', 'Fill the blue cells from row 6.'],
       ['Your event, your list', 'Examples: Games / G; Hospitality / H. Enter your own list below.'],
       ['One category per row', 'Use a different letter A–Z for each category. Leave blank only for events without categories.'],
-      ['Apply the list', 'Choose KY Claims > 1. Prepare event / apply settings. Active forms allow additions only.'],
+      ['Apply the list', 'At the top, open the KY Claims menu > 1. Prepare event / apply settings. Active forms allow additions only.'],
       ['Category name', 'Letter']
     ]).setWrap(true).setFontFamily('Arial').setVerticalAlignment('top');
     sheet.getRange('A1:B1').setBackground('#17365d').setFontColor('#ffffff').setFontWeight('bold');
@@ -80,6 +81,7 @@ function claimSetupCategoriesSheet_(book, reset) {
     sheet.hideColumns(10);
     sheet.getRange('J2').setValue('READY');
   }
+  claimSetupText_(sheet, 'B4', 'At the top, open the KY Claims menu > 1. Prepare event / apply settings. Active forms allow additions only.');
   return sheet;
 }
 function claimSetupCategories_(book) {
@@ -98,9 +100,9 @@ function claimSetupLayout_(book, sheet) {
   sheet.getRange('E1:E4').setValues([[KY_SETUP_MARKER_], [book.getId()], [ScriptApp.getScriptId()], ['BUILDING']]);
   sheet.getRange('A1:C32').clearContent().setFontFamily('Arial').setFontSize(11).setVerticalAlignment('top').setWrap(true);
   var rows = [
-    ['KY SPEEDY CLAIMS', 'Guided setup preview', 'Use fictional claims while the production decisions remain open.'],
-    ['YOUR EVENT', '', 'Use your own copy of the blank setup workbook for each event.'],
-    ['How to start', 'Fill the blue cells below', 'Then choose KY Claims > 1. Prepare event / apply settings.'],
+    ['KY SPEEDY CLAIMS', 'Guided setup preview', 'KY Claims is the menu at the top, beside Help. Open it to run actions.'],
+    ['YOUR EVENT', '', 'Bottom tabs: KY Setup (settings), KY Categories (list), KY Results (results).'],
+    ['How to start', 'Fill the blue cells below', 'At the top, open the KY Claims menu > 1. Prepare event / apply settings.'],
     ['Setting', 'Your value', 'Guidance'],
     ['Event code', '', 'Required. Example: CAMP26. Unique when combining event accounts; fixed after preparation.'],
     ['Event title', '', 'Required. Appears in voucher descriptions; fixed after preparation.'],
@@ -110,7 +112,7 @@ function claimSetupLayout_(book, sheet) {
     ['Manual checks', 'Tick only after checking', 'Google requires the receipt-upload question to be added in the form editor.'],
     ['I checked the receipt question', false, 'Exactly one File upload question: Receipt; Required; 1 file; Image and PDF; suitable size limit.'],
     ['I checked responder settings', false, 'Collect Verified email; allow repeated responses; check who can respond. Activation relies on these manual checks.'],
-    ['Then activate', 'KY Claims > 2. Activate form', 'Submit a fictional receipt through the claimant link and check DONE in the register.'],
+    ['Then activate', 'Top menu: KY Claims > 2. Activate form', 'Submit a fictional receipt through the claimant link and check DONE in the register.'],
     ['EVENT STATUS', '', 'Use Refresh status to update the processed-claim counts.'],
     ['Stage', 'Not prepared', ''],
     ['Next step / last error', 'Fill event settings, then prepare the event.', ''],
@@ -125,7 +127,7 @@ function claimSetupLayout_(book, sheet) {
     ['Incomplete claims', 0, 'Resolve the recorded cause, then choose Retry incomplete submissions.'],
     ['Last refreshed', '', ''],
     ['Software', KY_SETUP_VERSION_, 'Preview; separate events and native account/access checks still apply.'],
-    ['DAILY ACTIONS', '', 'Use the KY Claims menu; results and PDF links appear in KY Results.'],
+    ['DAILY ACTIONS', '', 'Use the KY Claims menu at the top; results and PDF links appear in the KY Results tab below.'],
     ['After a PDF export', 'Review every page before printing', 'Exports use the current Singapore submission week and retain separate snapshots.'],
     ['Keep settings/state intact', '', 'Do not delete internal project properties or register metadata.'],
     ['For another event', 'Copy the blank template', 'Start / open setup initialises the copy separately. Do not distribute an event workbook containing finance results.'],
@@ -197,8 +199,17 @@ function initializeClaimSetupWorkbook() {
       }
       claimSetupCategoriesSheet_(book, fresh);
       claimSetupText_(sheet, 'B3', 'Fill the blue cells and the KY Categories tab');
-      claimSetupText_(sheet, 'C3', 'Enter this event\'s category names and letters, then choose KY Claims > 1. Prepare event / apply settings.');
+      claimSetupText_(sheet, 'C1', 'KY Claims is the menu at the top, beside Help. Open it to run actions.');
+      claimSetupText_(sheet, 'C2', 'Bottom tabs: KY Setup (settings), KY Categories (list), KY Results (results).');
+      claimSetupText_(sheet, 'C3', 'Fill in this event\'s settings and categories, then open the KY Claims menu at the top > 1. Prepare event / apply settings.');
+      claimSetupText_(sheet, 'B13', 'Top menu: KY Claims > 2. Activate form');
+      claimSetupText_(sheet, 'C28', 'Use the KY Claims menu at the top; results and PDF links appear in the KY Results tab below.');
       claimSetupText_(sheet, 'B27', KY_SETUP_VERSION_);
+      claimSetupText_(sheet, 'A33', 'Cancelled claims');
+      claimSetupText_(sheet, 'C33', 'Numbers and receipts retained. Pending voucher updates are also counted as incomplete.');
+      if (fresh || sheet.getRange('B33').getValue() === '') claimSetupText_(sheet, 'B33', 0);
+      sheet.getRange('A33:C33').setFontFamily('Arial').setFontSize(11).setWrap(true).setVerticalAlignment('top');
+      sheet.setRowHeight(33, 48);
       sheet.getRange('C1').setFontSize(11);
       sheet.setRowHeight(1, 48);
       properties.setProperty('KY_SETUP_SCRIPT_ID', scriptId);
@@ -245,7 +256,10 @@ function claimSetupStatus_(book, sheet) {
   if (config && config.registerId) {
     var records = claimStore_(SpreadsheetApp.openById(config.registerId)).records();
     claimSetupText_(sheet, 'B24', records.filter(function (record) { return record.status === 'DONE'; }).length);
-    claimSetupText_(sheet, 'B25', records.filter(function (record) { return record.status !== 'DONE'; }).length);
+    claimSetupText_(sheet, 'B25', records.filter(function (record) {
+      return record.status !== 'DONE' && (record.status !== 'CANCELLED' || !record.cancellation || record.cancellation.pending);
+    }).length);
+    claimSetupText_(sheet, 'B33', records.filter(function (record) { return record.status === 'CANCELLED'; }).length);
   }
   claimSetupText_(sheet, 'B26', Utilities.formatDate(new Date(), 'Asia/Singapore', 'yyyy-MM-dd HH:mm:ss') + ' Singapore');
   return status;
@@ -313,6 +327,34 @@ function exportClaimEvent() {
     return summary;
   });
 }
+function cancelClaimEvent() {
+  return claimSetupAction_('Cancel claim', function (book, sheet) {
+    var ui = SpreadsheetApp.getUi();
+    // Prompts suspend execution and release Apps Script locks. Only lock the reads/writes between prompts.
+    var receipt = ui.prompt('Cancel claim', 'Enter the receipt number or full reference from this event\'s Claims register.', ui.ButtonSet.OK_CANCEL);
+    if (receipt.getSelectedButton() !== ui.Button.OK) return { status: 'ABORTED' };
+    var record = claimLock_(function () {
+      var config = claimConfig_(true);
+      return claimFindCancellation_(claimStore_(SpreadsheetApp.openById(config.registerId)).records(), receipt.getResponseText());
+    });
+    if (record.status === 'CANCELLED') throw new Error('This claim is already cancelled. Use Retry incomplete submissions if its voucher update is pending.');
+    var reason = ui.prompt('Cancellation reason', 'Enter a reason (1 to 500 characters). Cancellation is permanent; submit corrections as a new claim.', ui.ButtonSet.OK_CANCEL);
+    if (reason.getSelectedButton() !== ui.Button.OK) return { status: 'ABORTED' };
+    var text = reason.getResponseText().trim();
+    if (!text || text.length > 500) throw new Error('Enter a cancellation reason of 1 to 500 characters.');
+    var confirmation = record.reference + '\n' + record.payload.fullName + '\nWeek of ' + record.week +
+      '\nSGD ' + (record.payload.amountCents / 100).toFixed(2) + '\n' + record.payload.description + '\n\nReason: ' + text +
+      '\n\nKeep the number and receipt; remove this claim from the active voucher. Earlier PDFs remain: replace any previously prepared or submitted voucher. This does not reverse a payment. Continue?';
+    if (ui.alert('Confirm cancellation', confirmation, ui.ButtonSet.YES_NO) !== ui.Button.YES) return { status: 'ABORTED' };
+    var result = cancelClaimSubmission(record.receiptNumber, text);
+    claimSetupWriteResults_(book, 'Cancel claim: ' + result.reference, [
+      [result.payload.fullName, result.week, result.status, '', result.weeklyFileId ? 'https://docs.google.com/spreadsheets/d/' + result.weeklyFileId + '/edit' : '', '', '', result.cancellation.reason]
+    ], 'Cancelled. Earlier PDFs remain: re-export this week if applicable and replace any previously prepared or submitted voucher.');
+    claimLock_(function () { claimSetupStatus_(book, sheet); });
+    book.setActiveSheet(book.getSheetByName(KY_RESULTS_SHEET_));
+    return result;
+  });
+}
 function claimSetupWriteResults_(book, title, rows, summary) {
   var sheet = claimSetupResultsSheet_(book);
   var count = Math.max(sheet.getLastRow(), rows.length + 5, 7);
@@ -338,7 +380,7 @@ function claimSetupAction_(title, callback, initializing) {
   try {
     if (!initializing) sheet = claimSetupSheet_(book);
     var result = callback(book, sheet);
-    book.toast(title + ' complete. See KY Setup / KY Results.', 'KY Claims', 6);
+    book.toast(result && result.status === 'ABORTED' ? title + ' closed. No changes made.' : title + ' complete. See KY Setup / KY Results.', 'KY Claims', 6);
     return result;
   } catch (error) {
     var message = String(error.message || error).slice(0, 1500);

@@ -309,9 +309,15 @@ function retryPendingClaimSubmissions() {
   if (!config.active) throw new Error('Activate the pipeline first.');
   var records = claimStore_(SpreadsheetApp.openById(config.registerId)).records();
   var done = new Set(records.filter(function (record) {
-    return record.status === 'DONE';
+    return record.status === 'DONE' || (record.status === 'CANCELLED' && record.cancellation && !record.cancellation.pending);
   }).map(function (record) { return record.id; }));
   var responses = FormApp.openById(config.formId).getResponses();
+  // Repair from canonical records, even if the original Form response was deleted or its questions changed.
+  var cancellations = records.filter(function (record) { return record.status === 'CANCELLED' && record.cancellation && record.cancellation.pending; });
+  var cancellationIds = new Set(cancellations.map(function (record) { return record.id; }));
+  responses = responses.filter(function (response) { return !cancellationIds.has(response.getId()); }).concat(cancellations.map(function (record) {
+    return { getId: function () { return record.id; }, cancelledClaim: true };
+  }));
   var cursor = PropertiesService.getScriptProperties().getProperty(CLAIM_RETRY_CURSOR_);
   var pending = claimPendingRetries_(responses, done, cursor);
   var results = pending.map(claimRetryResponse_);
@@ -334,7 +340,13 @@ function claimRetryResponse_(response) {
       try {
         var config = claimConfig_(true);
         if (!config.active) throw new Error('Activate the pipeline first.');
-        return { id: id, status: processClaimResponse_(response, config).status };
+        var record;
+        if (response.cancelledClaim) {
+          var store = claimStore_(SpreadsheetApp.openById(config.registerId));
+          record = store.records().find(function (item) { return item.id === id; });
+          record = ClaimProcessor.repairCancellation(record, config, store, claimFilePorts_(config, store));
+        } else record = processClaimResponse_(response, config);
+        return { id: id, status: record.status };
       } finally {
         // Advance even when validation fails before a Claims row is reserved.
         PropertiesService.getScriptProperties().setProperty(CLAIM_RETRY_CURSOR_, id);
@@ -346,6 +358,22 @@ function claimRetryResponse_(response) {
 }
 
 function showClaimPipelineStatus() { return claimStatus_(claimConfig_(true)); }
+function claimFindCancellation_(records, receipt) {
+  var value = String(receipt || '').trim();
+  var number = /^\d+$/.test(value) ? Number(value) : null;
+  var record = records.find(function (item) { return (number !== null && item.receiptNumber === number) || item.reference === value; });
+  if (!record) throw new Error('No claim with that receipt number or reference exists in this event.');
+  return record;
+}
+function cancelClaimSubmission(receipt, reason) {
+  return claimLock_(function () {
+    var config = claimConfig_(true);
+    var store = claimStore_(SpreadsheetApp.openById(config.registerId));
+    var record = claimFindCancellation_(store.records(), receipt);
+    // Keep the existing permissions: operator identity is not collected for cancellations.
+    return ClaimProcessor.cancel(record.id, reason, '', config, store, claimFilePorts_(config, store));
+  });
+}
 function exportWeeklyClaimVouchers() {
   var config = claimConfig_(true);
   var today = Utilities.formatDate(new Date(), config.timezone, 'yyyy-MM-dd');
@@ -353,7 +381,7 @@ function exportWeeklyClaimVouchers() {
   var people = claimLock_(function () {
     var records = claimStore_(SpreadsheetApp.openById(config.registerId)).records();
     return Array.from(new Set(records.filter(function (record) {
-      return record.week === weekStart;
+      return record.week === weekStart && (record.status !== 'CANCELLED' || !record.cancellation || record.cancellation.pending);
     }).map(function (record) { return record.personKey; })));
   });
   var results = people.map(function (personKey) {
@@ -385,6 +413,10 @@ function claimExportPersonWeek_(config, store, personKey, weekStart) {
   var records = store.records().filter(function (record) {
     return record.personKey === personKey && record.week === weekStart;
   });
+  if (records.some(function (record) { return record.status === 'CANCELLED' && (!record.cancellation || record.cancellation.pending); })) {
+    throw new Error('A cancelled claim still needs its voucher updated. Retry incomplete submissions before exporting.');
+  }
+  records = records.filter(function (record) { return record.status !== 'CANCELLED'; });
   if (!records.length) return { personKey: personKey, week: weekStart, status: 'SKIPPED' };
   if (records.some(function (record) { return record.status !== 'DONE' || !record.receiptsReady; })) {
     throw new Error('This person has incomplete claims for the week; resolve them and retry before exporting.');

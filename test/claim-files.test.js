@@ -58,6 +58,7 @@ function environment() {
     return copied;
   };
   const store = {
+    records: () => env.records || [],
     getMeta: (name, key) => metadata.has(name + key) ? clone(metadata.get(name + key)) : null,
     saveMeta(name, key, value) {
       if (env.failCommit && name === 'Weeks' && value.rendered && !metadata.get(name + key)?.rendered) {
@@ -217,4 +218,113 @@ test('generated voucher names skip occupied suffixes and case variants', () => {
   env.ports.renderWeek(week, env.payload(1));
   assert.equal(book.active.getName(), 'Voucher (4)');
   for (const sheet of notes) assert.equal(book.getSheetByName(sheet.getName()), sheet);
+});
+
+test('cancelling the last active claim replaces owned voucher sheets with a zero-total notice', () => {
+  const env = environment(); const person = env.ports.ensurePerson(env.record);
+  let week = env.ports.ensureWeek(env.record, person);
+  env.ports.renderWeek(week, env.payload(1));
+  const book = env.books.get(week.fileId); const old = book.active.getSheetId();
+  book.insertSheet('Finance notes');
+  env.ports.rebuildCancelledWeek(env.record, { ...env.payload(1), claims: [] });
+  week = env.store.getMeta('Weeks', claims.weekKey(env.record));
+  assert.equal(week.rendered.totalCents, 0); assert.equal(week.rendered.claimCount, 0);
+  assert.equal(book.active.getRange('B4').getValue(), 0);
+  assert.match(book.active.getRange('A1').getValue(), /NO ACTIVE CLAIMS/);
+  assert.ok(book.getSheetByName('Finance notes'));
+  assert.ok(!book.getSheets().some(sheet => sheet.getSheetId() === old));
+  const notice = week.rendered.sheetId;
+  env.ports.rebuildCancelledWeek(env.record, { ...env.payload(1), claims: [] });
+  assert.equal(book.active.getSheetId(), notice);
+  week = env.store.getMeta('Weeks', claims.weekKey(env.record));
+  env.ports.renderWeek(week, env.payload(1));
+  assert.equal(book.active.getRange('H12').getValue(), 12.5);
+  assert.ok(!book.getSheets().some(sheet => sheet.getSheetId() === notice));
+});
+
+test('a failed empty-week cleanup reuses the published notice on retry', () => {
+  const env = environment(); const person = env.ports.ensurePerson(env.record);
+  const week = env.ports.ensureWeek(env.record, person);
+  env.ports.renderWeek(week, env.payload(1));
+  const empty = { ...env.payload(1), claims: [] };
+  env.failDelete = true;
+  assert.throws(() => env.ports.rebuildCancelledWeek(env.record, empty), /Delete failed/);
+  const published = env.store.getMeta('Weeks', claims.weekKey(env.record));
+  env.ports.rebuildCancelledWeek(env.record, empty);
+  const saved = env.store.getMeta('Weeks', claims.weekKey(env.record));
+  assert.equal(saved.rendered.sheetId, published.rendered.sheetId);
+  assert.equal(env.books.get(week.fileId).getSheets().length, 1);
+});
+
+test('cancellation without weekly resources creates nothing, while lost metadata stops for review', () => {
+  const env = environment(); const empty = { ...env.payload(1), claims: [] };
+  env.ports.rebuildCancelledWeek(env.record, empty);
+  assert.equal(env.books.size, 0);
+  assert.throws(() => env.ports.rebuildCancelledWeek({ ...env.record, weeklyFileId: 'lost' }, empty), /metadata is missing/);
+});
+
+test('new header details are allowed only after all conflicting claims in that week are cancelled', () => {
+  const env = environment(); const person = env.ports.ensurePerson(env.record);
+  const week = env.ports.ensureWeek(env.record, person);
+  env.ports.renderWeek(week, env.payload(1));
+  const replacement = { ...env.record, id: 'r2', payload: { ...env.record.payload, fullName: 'CORRECTED', paymentDetails: 'CORRECTED DETAILS' } };
+  env.records = [{ ...env.record, status: 'DONE' }, replacement];
+  assert.throws(() => env.ports.ensureWeek(replacement, person), /Name\/payment/);
+  env.records[0].status = 'CANCELLED';
+  const reused = env.ports.ensureWeek(replacement, person);
+  assert.equal(reused.fileId, week.fileId);
+  assert.equal(reused.fullName, 'CORRECTED');
+  assert.equal(reused.paymentDetails, 'CORRECTED DETAILS');
+  env.records.push({ ...replacement, id: 'r3', status: 'ERROR' });
+  assert.equal(env.ports.ensureWeek(replacement, person).fullName, 'CORRECTED');
+});
+
+test('processor and Sheets adapters cancel, repair and replace in the same workbook with corrected details', () => {
+  const env = environment();
+  const processor = require('../src/ClaimProcessor.js');
+  env.records = [];
+  env.store.saveRecord = record => {
+    const index = env.records.findIndex(item => item.id === record.id);
+    if (index < 0) env.records.push(clone(record)); else env.records[index] = clone(record);
+  };
+  env.ports.fileReceipt = record => 'receipt-url-' + record.id;
+  const config = { eventCode: 'TEST', eventTitle: 'SYNTHETIC Event', congregations: ['Youth'] };
+  const data = { id: 'r1', email: 'sample@example.com', submittedAt: '2026-11-12T04:00:00Z', localSubmittedDate: '2026-11-12',
+    fullName: 'SAMPLE', paymentDetails: 'SAMPLE ONLY', purchaseDate: '2026-11-01', description: 'SYNTHETIC Printing', congregation: 'Youth', amount: '12.50', fileIds: ['receipt-1'] };
+  const first = processor.process(data, config, env.store, env.ports);
+  env.failDelete = true;
+  assert.throws(() => processor.cancel('r1', 'Wrong payment details', '', config, env.store, env.ports), /voucher update pending/);
+  assert.equal(env.records[0].status, 'CANCELLED');
+  processor.repairCancellation(env.records[0], config, env.store, env.ports);
+  assert.equal(env.books.get(first.weeklyFileId).active.getRange('B4').getValue(), 0);
+  const second = processor.process({ ...data, id: 'r2', fullName: 'SAMPLE CORRECTED', paymentDetails: 'CORRECTED SAMPLE', fileIds: ['receipt-2'], amount: '7.25' }, config, env.store, env.ports);
+  assert.equal(second.weeklyFileId, first.weeklyFileId);
+  assert.equal(second.receiptNumber, 2); assert.equal(second.status, 'DONE');
+  const week = env.store.getMeta('Weeks', claims.weekKey(second));
+  assert.equal(week.rendered.claimCount, 1); assert.equal(week.rendered.totalCents, 725);
+  assert.equal(week.fullName, 'SAMPLE CORRECTED');
+  assert.equal(env.records[0].cancellation.pending, false);
+});
+
+test('cancelling a render-blocking long description lets the remaining claims recover', () => {
+  const env = environment(); const processor = require('../src/ClaimProcessor.js');
+  env.records = [];
+  env.store.saveRecord = record => {
+    const index = env.records.findIndex(item => item.id === record.id);
+    if (index < 0) env.records.push(clone(record)); else env.records[index] = clone(record);
+  };
+  env.ports.fileReceipt = record => 'receipt-url-' + record.id;
+  const config = { eventCode: 'TEST', eventTitle: 'SYNTHETIC Event', congregations: ['Youth'] };
+  const data = { id: 'long', email: 'sample@example.com', submittedAt: '2026-11-12T04:00:00Z', localSubmittedDate: '2026-11-12',
+    fullName: 'SAMPLE', paymentDetails: 'SAMPLE ONLY', purchaseDate: '2026-11-01', description: 'SYNTHETIC line\n'.repeat(30), congregation: 'Youth', amount: '12.50', fileIds: ['receipt-1'] };
+  assert.throws(() => processor.process(data, config, env.store, env.ports), /oversized row/);
+  assert.equal(env.records[0].receiptsReady, true);
+  const corrected = { ...data, id: 'short', description: 'SYNTHETIC Printing', fileIds: ['receipt-2'], amount: '7.25' };
+  assert.throws(() => processor.process(corrected, config, env.store, env.ports));
+  processor.cancel('long', 'Description prevents rendering; replace with a shorter correction', 'admin@example.com', config, env.store, env.ports);
+  const result = processor.process(corrected, config, env.store, env.ports);
+  const week = env.store.getMeta('Weeks', claims.weekKey(result));
+  assert.equal(result.status, 'DONE'); assert.equal(result.receiptNumber, 2);
+  assert.equal(env.records[0].status, 'CANCELLED');
+  assert.equal(week.rendered.claimCount, 1); assert.equal(week.rendered.totalCents, 725);
 });

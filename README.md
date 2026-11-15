@@ -10,6 +10,10 @@ A [guided Setup Workbook preview](docs/setup-workbook.md) now implements this se
 
 The new **KY Categories** tab accepts each event's category names and letters. Prepare uses this list for required Expense category and Receipt type dropdowns and retains their values with each claim. This extension has local test coverage; the earlier native run does not validate its new submission fields. Connecting an existing finance tracker and assigning its category serials remain separate work.
 
+For an event already using categories, finance can [add a category after claims have been submitted](docs/UserGuide.md#update-the-expense-categories): append a new name/unused letter in KY Categories and run Prepare event / apply settings. Existing mappings and saved claims stay intact. Do not add options only in the form editor; enabling categories for an already-used event that had none requires migration review.
+
+**Cancel claim** now records a permanent cancellation reason and audit details, retains the original number/receipt, and rebuilds the active voucher without the cancelled amount. Corrected submissions receive new numbers. Access uses the existing admin workbooks/folders. This extension has local test coverage; native Google cancellation validation is pending. See the [cancellation guide](docs/UserGuide.md#cancel-a-claim-and-submit-a-replacement).
+
 1. A finance IC copies the setup workbook, enters event settings, and authorises setup.
 2. Setup prepares the event's folders, submission form, registers, template copy, and automatic processing.
 3. A claimant submits claim details and a receipt through Google Forms.
@@ -57,7 +61,7 @@ The bundle command prepares a single Code.gs, appsscript.json, and quick-start g
 
 For the new submission test, use `npm run bundle -- /absolute/path/to/form-test --pipeline` to include the form-testing guide. Replace both the script and manifest; the pipeline requires Forms and trigger-management permissions too.
 
-Use `npm run bundle -- --installer` for the setup-workbook bundle and its maintainer guide. It creates ignored `local/setup-workbook/`; no web-app deployment or new service scope is required.
+Use `npm run bundle -- --installer` for the setup-workbook bundle and its maintainer guide. It creates ignored `local/setup-workbook/`; no web-app deployment is required. Cancellation keeps the existing permissions and records the reason and time without collecting the operator's identity. Existing installations with the matching manifest need only replace Code.gs.
 
 The form defaults Congregation to Youth without asking the claimant. Set Script Property `PIPELINE_ASK_CONGREGATION` to `true` and rerun `setupClaimPipeline` to show the dropdown; remove the property or set it to `false` and rerun setup to return to Youth automatically. This setting can also be applied to an active form. See the [form guide](docs/form-pipeline-test.md#changing-the-congregation-setting).
 

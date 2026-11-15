@@ -216,3 +216,28 @@ test('the previous export entry point now exports all people for this week too',
   assert.equal(env.exports.length, 2);
   assert.equal(result.exported, 2);
 });
+
+test('cancelled claims are omitted from PDFs and completed all-cancelled weeks produce no PDF', () => {
+  const env = environment([record(1, 'a@example.com'), record(2, 'a@example.com'), record(3, 'b@example.com')]);
+  for (const index of [0, 2]) {
+    env.records[index].status = 'CANCELLED'; env.records[index].cancellation = { pending: false };
+  }
+  const week = env.weeks.get('a@example.com|2026-11-09');
+  week.fingerprint = JSON.stringify(ClaimCore.weeklyPayload(env.records, env.records[1], { eventTitle: 'Test Event' }));
+  week.rendered.claimCount = 1; week.rendered.totalCents = 1250;
+  const result = env.context.exportWeeklyClaimVouchers();
+  assert.equal(result.exported, 1); assert.equal(result.failed, 0);
+  assert.equal(result.peopleWithClaims, 1); assert.equal(env.exports[0].rendered.totalCents, 1250);
+});
+
+test('a pending cancellation blocks PDF export even when no active claims remain', () => {
+  for (const allCancelled of [false, true]) {
+    const env = environment([record(1, 'a@example.com'), record(2, 'a@example.com')]);
+    env.records[0].status = 'CANCELLED'; env.records[0].cancellation = { pending: true };
+    if (allCancelled) { env.records[1].status = 'CANCELLED'; env.records[1].cancellation = { pending: false }; }
+    const result = env.context.exportWeeklyClaimVouchers();
+    assert.equal(result.failed, 1); assert.equal(result.exported, 0);
+    assert.match(result.results[0].error, /cancelled claim still needs its voucher updated/);
+    assert.equal(env.exports.length, 0);
+  }
+});

@@ -89,6 +89,22 @@ The user requested categories that vary by event, entered during setup. The vers
 
 This is native layout/initialisation evidence only. No new category-enabled form was prepared or submitted in this run; category/receipt-type dropdown delivery and their end-to-end Google persistence still need live validation. Earlier native submission results above apply to their attributed older builds. No finance-tracker sync or G1/H1 serial allocation is implemented yet.
 
+## Menu and worksheet guidance — 15 November 2026
+
+The user reported looking for a KY Claims worksheet tab. Native inspection confirmed KY Claims is the top menu beside Help, while KY Setup, KY Categories and KY Results are the program's worksheet tabs. The User Guide and workbook guidance now explicitly distinguish these locations, including what to do if the top menu itself is missing.
+
+The blank template was updated with bundle fingerprint `f5e9568ddd3533b87e7aad6bb0dc2e0825cc621d2633a8bce50236c1ee5aacf6`. The installed 82,221-character Code.gs was copied back and matched the supplied bundle after newline normalisation. Start / open setup finished successfully, retaining blank event fields, and the top menu was opened to inspect its actions alongside the bottom tabs. The manifest/scopes were unchanged. Private screenshot evidence is retained outside the repository. All 22 setup-workbook tests, syntax/manifest/document-link checks and three bundle modes passed. This wording change did not include new claim submissions or expand the earlier processing evidence.
+
+## Cancellation extension and template update — 15 November 2026
+
+Version `0.2.0-preview.3` adds permanent cancellation with reason and UTC time, retained original records/numbers/receipts, active voucher rebuilding, a zero-total non-payable notice for empty weeks, and recovery for pending cancellation updates. Corrected submissions receive new numbers. Access uses the existing restricted admin documents; no separate finance-role check was added. The user chose to keep the current permissions: no operator identity API is called, new cancellation records leave `by` empty, and Cancelled by displays Not recorded. The manifest remains unchanged.
+
+All **192 individual tests across ten files** pass locally, including cancellation/replay, exact remaining totals, no-number reuse, legacy register upgrades, prompt abort/confirmation, empty-week publication/cleanup recovery, pending export guards, canonical repairs without raw Form responses, corrected headers, and recovery after cancelling a render-blocking description. Syntax/manifest/docs checks and all three bundle modes pass. Bundle source fingerprint: `1c85cd9d810deed4ec3e10aa8c1b97057d786640401bce655b465adb01c06165`.
+
+The private blank Google setup template's bound Code.gs was updated through its editor. The installed **92,845 characters** were copied back and matched the bundle after newline normalisation. The installed manifest was read back and matched the unchanged source manifest as parsed JSON. **Start / open setup** completed successfully. Native copied ranges confirmed unchanged blank event inputs, blank event links, version 0.2.0-preview.3 and zero cancelled claims. **Cancel claim** opened its receipt/reference prompt without additional authorisation; closing the prompt returned **Cancel claim closed. No changes made.** No event was prepared, no claims were submitted or cancelled, and no real data was processed. Private UI screenshots and copied verification text remain outside the repository in `/tmp/ky-cancellation-template-20261115/`.
+
+This establishes native installation, layout refresh and prompt/abort behaviour only. Reduced/empty voucher rebuilding, register cancellation persistence, canonical recovery and revised PDF snapshots still need the [cancellation acceptance run](form-pipeline-test.md#cancellation-acceptance-checklist) with synthetic claims. Earlier native submission results do not validate these cancellation effects.
+
 ## Remaining work
 
 These confirmations do not validate the complete claims workflow. Still outstanding:

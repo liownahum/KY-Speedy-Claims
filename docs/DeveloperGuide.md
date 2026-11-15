@@ -2,7 +2,7 @@
 
 KY Speedy Claims is a Google Apps Script application for an event finance IC. It turns Google Form submissions into numbered receipt files, a persistent claims register, one voucher workbook per claimant/week, and PDFs for the current week's claimants.
 
-This guide describes the current source, including optional congregation collection, configurable event-folder placement, and weekly batch PDF export. Refer to the [User Guide](UserGuide.md) for operator instructions and the [decision log](decisions.md) for accepted requirements and unresolved production choices.
+This guide describes the current source, including per-event categories and later additions, optional congregation collection, configurable event-folder placement, permanent claim cancellation, and weekly batch PDF export. Refer to the [User Guide](UserGuide.md) for operator instructions and the [decision log](decisions.md) for accepted requirements and unresolved production choices.
 
 ## Contents
 
@@ -95,9 +95,28 @@ The architecture diagram shows calls/responsibilities between JavaScript modules
 | Voucher planning | [VoucherCore.js](../src/VoucherCore.js): `plan`, `literal`, `pdfQuery` | Integer-cent totals, worksheet/print coordinates, literal text, row sizing, and PDF query settings. |
 | Voucher rendering/export | [Voucher.gs](../src/Voucher.gs): `VoucherRenderer.render`, `exportPdf`, `templateOptions` | Validate the official layout, resize/fill a disposable worksheet, verify totals, and save valid PDF responses. |
 | Prototype/import support | [Prototype.gs](../src/Prototype.gs): `runVoucherPrototype`, `prototypeXlsxImporter_` | Synthetic renderer checks and Drive v2/v3 XLSX import selection. |
-| Guided setup | [SetupWorkbook.gs](../src/SetupWorkbook.gs): `onOpen`, setup/activation/status/retry/export menu actions | Bind a copied controller to its own project, adapt editable event/category settings, require form checks, and display links/results. |
+| Guided setup | [SetupWorkbook.gs](../src/SetupWorkbook.gs): `onOpen`, setup/activation/status/retry/cancellation/export menu actions | Bind a copied controller to its own project, adapt editable event/category settings, require form checks, and display links/results. |
 
 `ClaimCore`, `ClaimProcessor`, and `VoucherCore` are JavaScript modules shared with Node. Their CommonJS export guards are inactive in Apps Script. Other `.gs` modules rely on Apps Script globals. The fixed bundle order makes those globals available together in `Code.gs`.
+
+### Runtime entry points and call paths
+
+Each event is one script project. Execution starts from a spreadsheet menu action or the installed form-submit trigger; there is no continuously running application server or scheduled recovery worker. The following paths show the main calls; store reads/writes and validation helpers also run within them.
+
+| Trigger or action | Main call path |
+| --- | --- |
+| Open the workbook | `onOpen()` adds the menu without creating event resources. |
+| Start / open setup | `initializeClaimSetupWorkbook` → `claimSetupAction_` → `claimLock_` → binding/copy checks and owned sheet initialisation. |
+| Prepare event / apply settings | `prepareClaimEvent` → `claimSetupAction_` → `claimLock_` → `claimSetupApply_` → `setupClaimPipeline_` → configuration/status persistence. |
+| Activate form | `activateClaimEvent` → settings/manual-check validation under `claimLock_` → `activateClaimPipeline_` → install/reuse `onClaimFormSubmit` trigger and open the form. |
+| Actual form submission | `onClaimFormSubmit` → `claimLock_` → active/source guard → `processClaimResponse_` → `claimInput_` and `ClaimProcessor.process`, using `claimStore_` and `claimFilePorts_`. |
+| Process a new claim | `ClaimCore.normalize` → `ClaimCore.nextReceipt` → save PENDING → `ensurePerson` → `ensureWeek` → `fileReceipt` → `ClaimCore.weeklyPayload` → `renderWeek` → save DONE, with intermediate checkpoints. |
+| Render a non-empty week | `renderWeek` → copy pristine worksheet → `VoucherRenderer.render` → `VoucherCore.plan` and row-height calculations → total verification → persist active pointer/revision → cleanup/activate. |
+| Retry | `retryClaimEvent` → `retryPendingClaimSubmissions` → `claimPendingRetries_` → `claimRetryResponse_` → normal processor replay or `ClaimProcessor.repairCancellation`. |
+| Cancel claim | `cancelClaimEvent` → prompts/confirmation → `cancelClaimSubmission` under `claimLock_` → `ClaimProcessor.cancel` → `repairCancellation` → `rebuildCancelledWeek` → `renderWeek`. |
+| Export PDFs | `exportClaimEvent` → `exportWeeklyClaimVouchers` → separately locked `claimExportPersonWeek_` calls → `VoucherRenderer.exportPdf` → `VoucherCore.pdfQuery` → export request/PDF validation → save file. |
+
+`setupClaimPipeline()` and `activateClaimPipeline()` are public lock-taking wrappers. Their trailing-underscore variants let the guided installer call the implementation while already holding that lock. The underscore is an internal-function convention, not a permission check. `claimSetupAction_` validates the bound controller, catches action errors and returns an ERROR result with a toast/status message; the processing layer throws errors after attempting to save its recovery state.
 
 ### User interaction component
 
@@ -114,7 +133,7 @@ The following are plain data records and contracts, not database tables or Java 
 | Record | Key | Important fields |
 | --- | --- | --- |
 | Installation configuration | One Script Property per project | `version`, `eventId`, `eventCode`, `eventTitle`, `timezone`, resource IDs, allowed congregations, question IDs, `uploadQuestionId`, `active`, optional `parentFolderId`. |
-| Claim | Google response `id` | `personKey`, `submittedAt`, `week`, `payload`, `receiptNumber`, `reference`, `status`, `receiptsReady`, error and file links. |
+| Claim | Google response `id` | `personKey`, `submittedAt`, `week`, `payload`, `receiptNumber`, `reference`, `status`, `receiptsReady`, error and file links; optional `cancellation: {reason, at, by, pending}`. |
 | Person metadata | `personKey` | First recorded name, claimant folder ID, receipt-folder ID. |
 | Week metadata | `personKey + '|' + week` | Workbook ID, name/payment snapshot, revision, rendered-sheet metadata, payload fingerprint, and owned sheet IDs pending cleanup. |
 
@@ -136,7 +155,7 @@ Identity rules:
 | --- | --- |
 | Script Property `KY_CLAIM_PIPELINE` | Serialised installation configuration. |
 | Script Property `KY_CLAIM_RETRY_CURSOR` | Last attempted response ID for fair manual retry selection. |
-| Register Claims tab | Fifteen columns: response ID, receipt number, reference, submission time, week, email, name, description, congregation, amount, status, receipt URL, workbook URL, error, State JSON. |
+| Register Claims tab | A:O retain response ID through State JSON at O; P:R add category, letter and receipt type; S:V add cancellation reason, UTC timestamp, actor and voucher-update state. Existing rows are not rewritten on header upgrade; occupied or unlabelled extension data stops for review. |
 | Register People/Weeks tabs | `Key` and `State JSON` metadata entries. |
 | Linked raw form-response tab | Google's original response destination, separate from processed Claims. |
 | Drive | Pristine template copy, claimant folders, original receipt files, weekly workbooks, and exported PDFs. |
@@ -192,6 +211,10 @@ Category names are trimmed and limited to 80 characters; letters are trimmed and
 
 Before activation, mappings can be revised. Active mappings allow additions only, preserving existing exact name/letter pairs so unreserved responses remain interpretable. Enabling categories on an already-active legacy form, or an inactive form that already has responses, stops for migration review. Adding a property alone does not change submission interpretation: `config.categories` is the applied snapshot. New claims validate and retain category/name/receipt type in their canonical payload; retries of reserved claims keep that snapshot. Global receipt numbers, official voucher layout, and receipt filenames remain unchanged. Tracker SN allocation and external-sheet sync are not implemented by this extension.
 
+An active event with non-empty `config.categories` can therefore append categories **after submissions exist**. The guided path is `prepareClaimEvent` → `claimSetupApply_` (read/normalise KY Categories, check `ClaimCore.categoryChanges`, save `PIPELINE_CATEGORIES`) → `setupClaimPipeline_`. Its active branch calls `claimConfigureCategories_` on the existing form. That helper checks the old mappings, updates/reuses the required list items, and saves the applied `config.categories`. This path retains the form/resource IDs and active state; it does not require activation or replace the submission trigger. Existing category/letter pairs must remain exact; names and letters for additions must pass uniqueness validation.
+
+For example, append `{name: 'Transport', prefix: 'T'}` to Games/G and Hospitality/H. A subsequent submission can select Transport and stores Transport/T. A previously reserved Games/G claim retains Games/G and its original receipt type on retry. Editing a Form dropdown directly bypasses this configuration path: `ClaimCore.normalize` rejects a choice absent from applied `config.categories`, potentially before reserving a Claims row. Editing the worksheet or Script Property without running setup also leaves the applied form/configuration unchanged. See the [operator steps](UserGuide.md#update-the-expense-categories) and [native category-update checklist](form-pipeline-test.md#add-a-category-after-submissions).
+
 KY Categories is an owned worksheet with J1 marker/J2 BUILDING–READY layout state. Same-event reopening preserves the table; initialising a true copy clears event-specific rows and the recognised category property along with other copied configuration. A foreign worksheet using the reserved name blocks reset. The register extends the existing fifteen columns with Expense category / Category letter / Receipt type at P:R, retaining State JSON at O and old rows without backfill. Foreign headers or unlabelled data in those columns stop migration rather than being overwritten.
 
 `claimParentFolderId_` accepts a folder ID or a normal HTTPS Drive folder URL, including account-specific `/drive/u/N/folders/` links. `claimDestinationFolder_` requests Advanced Drive metadata, requires a folder with `capabilities.canAddChildren`, rejects a populated `driveId`, and rejects trashed destinations. These fields are supported by the existing Drive service versions used here.
@@ -227,20 +250,20 @@ After reservation the processor:
 1. Ensures the person's folder metadata and the week workbook/header snapshot.
 2. Saves the weekly workbook ID on the claim.
 3. Renames/moves the original receipt file, marks `receiptsReady`, and saves that stage.
-4. Reconstructs the week from all matching receipt-ready canonical records, ordered by receipt number.
+4. Reconstructs the week from matching receipt-ready canonical records excluding `CANCELLED`, ordered by receipt number.
 5. Calls `renderWeek` and finally saves status `DONE` with an empty error.
 
 Failures inside this effects phase attempt to save `ERROR` and a bounded error message, then propagate the exception. Validation failures before reservation do not create Claims rows. The reservation write itself is outside the effects `try` block; a failed/uncertain reservation can leave a stored `PENDING` record rather than `ERROR`. A later retry looks up the response ID before allocating another number.
 
-An earlier `ERROR` with `receiptsReady: true` may already be included when a later successful claim reconstructs that week. Status `DONE` is not the inclusion predicate for reconstruction. Batch PDF export is more conservative and blocks a person if any of their current-week records is incomplete.
+An earlier `ERROR` with `receiptsReady: true` may already be included when a later successful claim reconstructs that week. Status `DONE` is not the inclusion predicate for reconstruction. Batch PDF export is more conservative and blocks a person if any active current-week record is incomplete or a cancellation voucher update is pending.
 
 ### Claimant folders and stable weekly workbooks
 
-`claimFilePorts_` supplies four functions: `ensurePerson`, `ensureWeek`, `fileReceipt`, and `renderWeek`.
+`claimFilePorts_` supplies `ensurePerson`, `ensureWeek`, `fileReceipt`, `renderWeek`, and `rebuildCancelledWeek`.
 
 Person metadata is looked up by email key. New claimant and Receipts folders have descriptions marked with installation/person identity, so a partial retry can distinguish same-name folders. Once recorded, their IDs are reused; existing folder names are not automatically updated when a later display name changes.
 
-Week metadata is looked up by claimant/week key. A new workbook's ID is saved before its move into the claimant folder. Existing weeks reject conflicting name/payment snapshots before receipt filing. A new week can have its own header snapshot.
+Week metadata is looked up by claimant/week key. A new workbook's ID is saved before its move into the claimant folder. Existing weeks reject conflicting name/payment snapshots before receipt filing while conflicting active records remain. After those conflicting records have been cancelled, replacements with matching corrected details may supply new headers in the same workbook. A new week can have its own header snapshot. Existing person-folder labels are retained.
 
 `fileReceipt` keeps the uploaded file's ID, renames it to the receipt number plus an extension, and moves it into the claimant's Receipts folder. Repeating those operations is safe for the same saved claim. MIME validation allows images or PDF; form-editor restrictions supply the upload-size/type/count experience.
 
@@ -271,7 +294,7 @@ Before pointer publication, the prior voucher is retained. After publication, re
 
 `exportWeeklyClaimVouchers` fixes the week at invocation using the current Singapore-local date. It selects unique claimant keys from saved records in that week under a short lock. It then takes/releases the lock separately for each person's export, allowing submissions between people.
 
-For each selected person, `claimExportPersonWeek_` reloads their current-week records. No records means `SKIPPED`; any non-`DONE` or non-receipt-ready record blocks that person's PDF. The helper requires person/week/render metadata and an exact fingerprint match with the reconstructed canonical payload.
+For each selected person, `claimExportPersonWeek_` reloads their current-week records. A pending cancellation voucher update blocks export. Fully cancelled records are then excluded; no active records means `SKIPPED`, and any remaining non-`DONE` or non-receipt-ready record blocks that person's PDF. Fully cancelled-only weeks are omitted from batch selection. The helper requires person/week/render metadata and an exact fingerprint match with the reconstructed canonical payload.
 
 The exporter uses the existing workbook's rendered sheet/range and saves a new revision/UUID-named PDF into that person's folder. It does not create empty people/week resources. Other weeks' claims do not affect eligibility. Failures become per-person `ERROR` results, while the batch continues. The final summary includes counts and all results; individual results are logged as each person finishes.
 
@@ -283,9 +306,19 @@ The exporter uses the existing workbook's rendered sheet/range and saves a new r
 
 `claimLock_` uses `LockService.getScriptLock()`, waits up to 30 seconds, and releases in `finally`. Number allocation and claim effects run under this installation-wide lock. It serialises one project; it does not provide a transaction across Forms, Drive, and Sheets or across separate installations.
 
-`retryPendingClaimSubmissions` collects responses not marked `DONE`, selecting at most ten. Selection rotates the original response list after the saved response ID **before** filtering completed responses. A completed cursor therefore still has a position; a missing/deleted cursor restarts from the beginning.
+`retryPendingClaimSubmissions` collects responses not marked `DONE` or fully `CANCELLED`, selecting at most ten work items. Pending cancellation records replace their raw response in this list or are appended when the response was deleted. These repairs use canonical state without reading Form answers. Selection rotates the combined list after the saved response ID **before** filtering terminal responses. A completed cursor therefore still has a position; a missing/deleted cursor restarts from the beginning.
 
 Each attempt reloads configuration and processes under its own lock. A `finally` block persists that response ID as the cursor even when validation fails before reservation. Per-attempt errors are returned without stopping later attempts. Cursor persistence can itself fail; there is no claim of exactly-once execution across all Google failure boundaries.
+
+### Permanent claim cancellation
+
+`cancelClaimSubmission(receipt, reason)` resolves an event-local receipt number or exact full reference under `claimLock_`. `ClaimProcessor.cancel` requires a reason of 1–500 characters and saves `CANCELLED` with immutable cancellation reason, UTC time and `pending: true` **before** rebuilding. The user chose to keep the existing permissions: no operator identity API is called, `by` remains empty for new cancellations, and the register displays Not recorded. The manifest has no new scope; the effective/trigger owner's identity is never substituted. The original payload, amount, number, receipt and weekly file links are retained. Repeated cancellations preserve the original audit, and `process` treats CANCELLED as terminal. A corrected submission needs a fresh upload/file ID and receives the next event-wide number; it follows its own submission week. Replacement linking and undo are not implemented.
+
+`weeklyPayload` excludes CANCELLED records regardless of `receiptsReady`. `rebuildCancelledWeek` reloads existing week metadata and stages the reduced voucher in the same workbook. With no receipt-ready active claims, it publishes a verified zero-total **NO ACTIVE CLAIMS — DO NOT SUBMIT** notice instead of passing an empty claim list to the voucher renderer. The same pointer/cleanup recovery applies. If cancellation occurred before any weekly workbook existed, no workbook is created; a saved file link with missing metadata stops for review.
+
+After rebuilding and cleanup, the processor saves `pending: false`. Failure leaves the status CANCELLED with a pending update and bounded error; retry repairs from canonical data even without the raw Form response. Export blocks while any cancellation update in that person/week is pending. An old physical worksheet can remain after a failed rebuild, so it must not be printed; use Last error and the cancellation update column to resolve it. Existing PDF snapshots are retained and never silently rewritten. The operator must replace earlier printed/submitted versions, and request maintainer help for past-week PDF selection. Cancellation does not reverse or track a payment.
+
+`cancelClaimEvent` adds the guided menu flow: receipt/reference, reason, then confirmation displaying claimant, week, description and amount. UI prompts hold no lock because Google suspends execution for them; the final action reloads state under its own lock. Binding/copy guards remain. There is no finance-role permission layer: access relies on the installation's restricted admin workbooks/folders. Do not infer new or inherited sharing restrictions from the presence of the menu.
 
 ### Amounts and input boundaries
 
@@ -306,7 +339,7 @@ Claim limits include email 254 characters, full name/payment details 200 each, i
 | PDF scope | Batch all current-week claimants and isolate per-person failures. | Selecting only the latest record omits other claimants and can select an older week. |
 | PDF retention | Keep separately named snapshots, preserving previous exports. | Replacement simplifies folder contents but needs an accepted correction/submission-retention policy. |
 
-Unresolved production decisions include voucher Date policy, correction/voiding and payment-detail changes, paid/closed weeks, and any additional pagination requirements. Do not silently implement them as if they were accepted. Consult [decisions](decisions.md) and [requirements](requirements.md).
+Unresolved production decisions include voucher Date policy, approval/payment and closed-week handling, and any additional pagination requirements. Cancellation and new submissions provide the accepted correction path in D18; this does not define reopening paid/closed weeks. Consult [decisions](decisions.md) and [requirements](requirements.md).
 
 ## Documentation logging testing and operations
 
@@ -339,7 +372,8 @@ For existing standalone installations, choose a public function in the Apps Scri
 | `setupClaimPipeline` | Create/resume setup and apply parent-folder/congregation settings. |
 | `activateClaimPipeline` | Validate the form, apply congregation settings, install/reuse the trigger, and open submissions. |
 | `showClaimPipelineStatus` | Log resource links and applied settings. |
-| `retryPendingClaimSubmissions` | Attempt the next batch of up to ten incomplete responses. |
+| `retryPendingClaimSubmissions` | Attempt up to ten incomplete responses or pending cancellation voucher repairs. |
+| `cancelClaimSubmission(receipt, reason)` | Permanently cancel an event receipt number/reference and rebuild its active voucher. |
 | `exportWeeklyClaimVouchers` | Export PDFs for all current-week claimants. |
 | `exportLatestClaimVoucher` | Compatibility alias for the same weekly batch. |
 
@@ -406,6 +440,8 @@ These stories summarise the accepted scope and current delivery boundaries; they
 | US06 | Finance IC | Default Youth or ask for congregation | The form asks only the relevant questions. | Script Property applied by setup/activation. |
 | US07 | Finance IC | Retry interrupted processing | Saved IDs and numbers are reused. | Manual fair retry batches; cross-service failure limits apply. |
 | US08 | Finance IC | Export every current-week claimant | Nobody with claims is omitted in favour of the latest submitter. | Per-person batch PDFs and no-input skips; native one-claimant path passed, multi-person batch validation pending. |
+| US09 | Finance IC | Add a category after claims have arrived | New expense types can use the same event form without changing past records. | Append-only mappings through KY Categories and Prepare; category-enabled submission/native update acceptance pending. |
+| US10 | Finance IC | Cancel an incorrect claim and arrange a replacement | Active vouchers exclude it while its number, receipt and reason remain traceable. | Permanent reason/time audit and new-number replacements; native menu/abort checked, processing/recovery/PDF acceptance pending. |
 
 ### Use cases
 
@@ -539,5 +575,11 @@ Use disposable event installations and fictional data. These are acceptance inst
 2. Test long names/payment placeholders/descriptions and inspect every printed page. The previously accepted short/long samples do not establish every boundary case.
 3. Repeat installation under a second finance IC account. Verify ownership, upload destination, authorisation, trigger execution, access boundaries, and operation without the first IC's live records.
 4. Test genuinely simultaneous submissions for distinct event-wide numbers and no duplicate claimant/week resources.
+
+### MT09 Categories after submissions and claim cancellation
+
+Follow [Add a category after submissions](form-pipeline-test.md#add-a-category-after-submissions) in a separate synthetic event. Verify the active form/question IDs and trigger are retained, the new category processes successfully, previous claims keep their snapshots, and forbidden mapping changes fail. Separately verify that enabling categories on a legacy active/used form with no previous categories stops for review.
+
+Follow the [cancellation acceptance checklist](form-pipeline-test.md#cancellation-acceptance-checklist) for retained original identities, reduced totals, zero-active-claim notice, new-number replacement, repeated replay, pending repair and PDF blocking/revision behaviour. Native installation and prompt/abort checks are recorded in [live validation](live-validation.md#cancellation-extension-and-template-update--15-november-2026); they are not processing/recovery acceptance.
 
 Record the source fingerprint, inputs, account/setup context, observed IDs/counts/totals, errors, and PDF checks privately. Do not publish live financial data with the test report.

@@ -2,6 +2,8 @@
 
 This preview moves event setup and routine finance actions into a Google Sheets menu. Each event uses its own copy of a **blank workbook with its own bound Apps Script project**. Finance ICs using a prepared template do not paste code, set Script Properties, or use the Apps Script function selector.
 
+**KY Claims is the menu at the top of Google Sheets, beside Help.** It is not a worksheet tab. The bottom tabs are KY Setup (settings), KY Categories (category list), and KY Results (latest action results). References such as KY Claims → Start / open setup mean open the top menu and choose its action. If the menu is missing, open your editable copy on a computer, allow it to finish loading and reload if needed; ask the maintainer if it remains absent.
+
 Google authorisation and the receipt-upload question still require the operating finance IC's participation. This interface does not resolve the existing production Date/correction decisions or the long-description issue; use fictional claims during preview validation.
 
 ## Finance IC: start an event
@@ -25,11 +27,14 @@ Only the claimant form link is intended for claimants. The setup workbook, form 
 | Activate form | Check the two manual acknowledgements, install/reuse the submission trigger, and open the form. |
 | Refresh status | Refresh links and counts of completed/incomplete processed Claims records. Invalid responses can fail before a Claims row exists; check raw responses if a submission is missing. |
 | Retry incomplete submissions | Attempt the next existing retry batch. KY Results shows outcomes; no pending responses is reported explicitly. Invalid answers or conflicting payment details still need review. |
+| Cancel claim | Enter a receipt number/reference and required reason, review the claim and confirm permanent cancellation. The number, receipt and original details remain; the active voucher is rebuilt without this claim. See [cancellation and replacements](UserGuide.md#cancel-a-claim-and-submit-a-replacement). |
 | Export current-week PDFs | Run the existing weekly batch. KY Results shows each person's status, PDF/workbook links, claim count, total, and errors. Inspect every PDF before printing. |
 
-KY Results shows the latest retry/export action only. PDF snapshots themselves remain in the claimant folders. Weeks still use submission time, Monday–Sunday in Singapore. The detailed claim rules and limits in the [User Guide](UserGuide.md) are unchanged.
+KY Results shows the latest retry/cancellation/export action only. PDF snapshots themselves remain in the claimant folders. Weeks still use submission time, Monday–Sunday in Singapore. See the detailed claim rules in the [User Guide](UserGuide.md).
 
 A non-empty category list adds required **Expense category** and **Receipt type** dropdowns to the form. Receipt type has Hardcopy / E-receipt choices; either still requires the receipt upload. Prepare applies edits to the list; editing the table alone has no effect on the form. Before activation the list can be revised freely. After activation only additions with unused letters are allowed. Existing active or already-used forms without categories require maintainer review before enabling this feature. Saved claims retain their category, letter and receipt type on retry. The category letters do not yet allocate tracker serials or sync a finance tracker.
+
+**After submissions:** an event already using categories can append a category in KY Categories and run **1. Prepare event / apply settings**. Check the new choice through the claimant form link. Keep every existing category name/letter pair unchanged, and do not edit dropdown choices only in the form editor. The same form stays active without reactivation; recorded claims are not recategorised. See the [step-by-step instructions](UserGuide.md#update-the-expense-categories).
 
 ## Copies and existing installations
 
@@ -60,10 +65,12 @@ The bound script is copied with its container according to [Google's bound-scrip
 
 ## Implementation and validation
 
-`src/SetupWorkbook.gs` supplies the menu, owned worksheet layout, copy-binding guard, settings adapter, status, and results. Pipeline setup/activation retain public locked entry points and expose internal functions for the installer to call while already holding the same lock. A script-binding guard in configuration reads rejects inherited IDs from another guided project, including direct calls to legacy pipeline entry points. No new scopes or scheduled triggers are added.
+`src/SetupWorkbook.gs` supplies the menu, owned worksheet layout, copy-binding guard, settings adapter, status, and results. Pipeline setup/activation retain public locked entry points and expose internal functions for the installer to call while already holding the same lock. A script-binding guard in configuration reads rejects inherited IDs from another guided project, including direct calls to legacy pipeline entry points. Cancellation uses the existing permissions; no operator identity is collected and no scheduled triggers are added.
 
 Local tests exercise invalid/immutable settings, copy isolation and resets, reserved-sheet preservation, interrupted preparation, activation acknowledgements, result links/escaping, counts and empty retry scans. These substitutes do not establish native copy behaviour, authorisation, or second-account operation. Record observed native results separately in [live validation](live-validation.md).
 
 On 13 November 2026, a private blank template was copied through Google Sheets and its copy passed preparation, guarded activation, an actual browser claim, status refresh, an empty retry scan, and a one-claim/12.50 PDF export through the menu. No source code was pasted into the copy, and the blank template retained empty event settings and links. This was one operating account; independent second-IC installation and copies of already-configured controllers remain separate acceptance cases. See the [native evidence and build attribution](live-validation.md#guided-workbook-native-run--13-november-2026).
 
 The category-table extension is version 0.2.0-preview.2. Local tests cover per-event lists, duplicate/partial rows, additions and locked mappings, copying/reset, form questions, stored choices, retries and register upgrades. The updated blank template's table and recovery from interrupted initialisation were checked in Google Sheets. Its end-to-end Google submission check is not implied by that layout check or the earlier native run.
+
+The cancellation extension is version **0.2.0-preview.3**. It uses existing admin access without a separate finance-role check. The manifest and permissions are unchanged. Cancellation records the reason and time; Cancelled by displays Not recorded. To upgrade an existing bound installation with the matching existing manifest, replace its complete Code.gs, retain its properties/resources, reload Sheets, and choose Start / open setup to refresh owned labels/version. Register columns S:V are added on the next register access; occupied columns stop for review. Do not initialise a new event or clear properties to upgrade. The blank Google template was updated on 15 November 2026; exact source/manifest, setup refresh and cancellation prompt/abort were verified. Actual cancellation effects with synthetic claims remain untested in Google. Repository builds do not update existing Google installations automatically. See the [native record](live-validation.md#cancellation-extension-and-template-update--15-november-2026).

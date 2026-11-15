@@ -101,6 +101,19 @@ For a submission on 12 November 2026, the week start is **2026-11-09**. Weeks ru
 
 The weekly workbook ID stays the same. Processing renders a fresh voucher tab from the pristine template, verifies it, saves its identity, then removes the prior generated tab. Manually added non-reserved tabs are retained, but edits to the generated Voucher tab are replaced by the next claim. If another tab already uses the name Voucher, the generated tab uses an available name such as Voucher (2). PDFs are generated on demand; each export gets a new revision filename.
 
+### Add a category after submissions
+
+This checklist applies to an event that already has a non-empty category list. The extension has local test coverage; this is a native acceptance procedure, not a report of a completed Google test.
+
+1. Prepare/activate a synthetic event with Games/G and Hospitality/H, then submit a claim in Games. Record the form ID, question IDs, trigger count and saved claim's category, letter, receipt type and receipt number.
+2. In the guided workbook, append Transport/T in **KY Categories** and choose **KY Claims → 1. Prepare event / apply settings**. For a standalone installation, append the same entry to the `PIPELINE_CATEGORIES` JSON array and run `setupClaimPipeline`.
+3. Expect the same active form and category/receipt-type question IDs, one unchanged submission trigger, and Transport in the required Expense category dropdown. Reactivation is unnecessary.
+4. Submit a fresh browser response selecting Transport. Expect DONE with Transport/T in the saved payload and register, the next event-wide receipt number, and reuse of the existing claimant/week workbook when identity/week match. Earlier claims retain their original categories and receipt types.
+5. Try changing an existing category name/letter or removing its row, and try adding a duplicate letter/name. Expect rejection; do not proceed to submissions until the original list is restored and applied. Perform deliberate invalid-choice tests only in disposable test events.
+6. For a pending reserved claim, apply a valid addition and retry. Its existing category/letter/receipt-type snapshot and receipt number must remain unchanged. Do not manufacture pending states by editing a real register.
+
+Do not add an option only in the Form editor: the processor validates against the applied event configuration, so an unknown choice can be rejected before a claim is reserved. Enabling categories for a form that originally had none and is already active or has responses stops for migration review; do not clear configuration or responses to bypass that guard. The [User Guide](UserGuide.md#update-the-expense-categories) gives the operator steps; the [Developer Guide](DeveloperGuide.md#configuration-and-event-folder-placement) describes configuration (see its category paragraphs).
+
 ### Export all current-week claimants
 
 Replace `Code.gs` with the latest bundle, then select **exportWeeklyClaimVouchers** and Run. This code update does not require a new manifest or rerunning setup. The week is fixed when the run starts, using Monday–Sunday in Asia/Singapore. The batch selects every person with saved claims in that week, then exports each person's weekly voucher into their own existing folder. No PDF, folder, or weekly workbook is created for a person with no claims that week. An event with no current-week claims returns zero exports.
@@ -113,13 +126,13 @@ Submissions can continue between people in the batch. People first submitting af
 
 - An earlier setup bundle stopped with **The form currently has no response destination.** while reading a new form's destination. Replace `Code.gs` with the corrected bundle and rerun **setupClaimPipeline** in the same project. It reuses saved resources and links the register; keep Script Properties and existing resources intact. This fix does not change the manifest.
 - Check the **Claims** status and **Last error**, plus Apps Script **Executions**. The raw **Form Responses** tab is separate from processed Claims.
-- Run **retryPendingClaimSubmissions** after fixing a service/access problem. It retries up to ten non-completed responses per run, retaining reserved receipt numbers and stored file IDs. Each run continues after the last attempted response and wraps around, so repeatedly invalid early submissions do not block later claims. Failed attempts advance this saved position too; completed claims are skipped. If the last attempted response has been deleted, retries resume from the first pending response.
+- Run **retryPendingClaimSubmissions** after fixing a service/access problem. It attempts up to ten incomplete responses or pending cancellation updates per run, retaining reserved receipt numbers and stored file IDs. Each run continues after the last attempted work item and wraps around, so repeatedly invalid early submissions do not block later claims. Failed attempts advance this saved position too; completed and fully cancelled claims are skipped. If the cursor is absent from the current work list, selection restarts from the first pending item. Cancellation updates use saved claim data even when the raw Form response has been deleted.
 - Invalid date/amount, missing email, or an incorrect file count can fail before a Claims row is reserved. The raw response remains in Forms; retry output shows the error. Use a new valid submission for this test. There is no general correction interface yet.
-- Conflicting full name/payment details for the same person/week are flagged for review. Previous details are not silently overwritten. Retrying alone cannot resolve that conflict.
+- Conflicting full name/payment details for the same person/week are flagged for review. Previous details are not silently overwritten. Retrying alone cannot resolve that conflict; cancel incorrect claims and arrange corrected replacements with matching details, preserving the audit history.
 - Do not delete or edit Claims rows, State JSON, People, Weeks, generated helper tabs, or saved Script Properties. They hold the receipt sequence and recovery state. Hiding State JSON is for readability, not an access control.
 - **showClaimPipelineStatus** prints the setup links again.
 
-This is a test installation. Approval, paid/closed states, corrections, scheduled recovery, and selecting a past week for export are not implemented. Rare failures between Google resource creation and saving its ID can leave an unused file/folder requiring review; the services do not provide one transaction across Forms, Drive, and Sheets. Keep event resources restricted to the finance IC during testing.
+This is a test installation. Corrections use permanent cancellation and new submissions; editing saved answers, approval/payment states, closed-week handling, scheduled recovery, and selecting a past week from the PDF menu are not implemented. Rare failures between Google resource creation and saving its ID can leave an unused file/folder requiring review; the services do not provide one transaction across Forms, Drive, and Sheets. Keep event resources restricted to the finance IC during testing.
 
 Record the observed receipt numbers, workbook reuse, totals, upload owner/location, retry result, and PDF appearance. The independent second-finance-IC installation and simultaneous-submission cases remain additional live tests.
 
@@ -134,3 +147,15 @@ npm run bundle -- /absolute/path/to/form-test --pipeline
 ```
 
 This produces `Code.gs`, `appsscript.json`, and this guide as `START-HERE.md`. Updating GitHub does not update the code already pasted into your Apps Script project.
+
+## Cancellation acceptance checklist
+
+The blank template has the cancellation update installed, and its prompt/abort path was checked natively. Cancellation processing, voucher rebuilding and revised PDFs still need this acceptance run. Use a separate synthetic event. Guided installations use **KY Claims → Cancel claim**. In a standalone project, a temporary operator wrapper can call `cancelClaimSubmission(1, 'SYNTHETIC wrong amount')`; keep existing properties and resources. Update Code.gs and retain the matching existing manifest/properties; cancellation adds no permission and does not collect operator identity.
+
+1. Submit 12.50 and 7.25 for one person/week; export and retain the 19.75 PDF. Cancel receipt 1 with a reason. Check CANCELLED, unchanged number/payload/receipt link, UTC time, Cancelled by showing Not recorded, and UPDATED in S:V. The stable weekly workbook should have exactly one claim row, receipt 2 and total 7.25. Export a new 7.25 PDF and confirm the earlier PDF remains unchanged.
+2. Retry and replay the cancelled response: no revived claim, no receipt movement or new number. Submit a corrected replacement with a fresh upload; it receives the next event-wide number. Check other people/weeks were untouched.
+3. Cancel the remaining active claims. Check the zero-total NO ACTIVE CLAIMS notice, no current-week PDF for that person, and separate cancelled counts. Submit a replacement and check the same workbook is reused; corrected name/payment headers are allowed only after all conflicting active claims were cancelled.
+4. Close each prompt or decline confirmation: no state change. Blank reasons, unknown numbers and another event's full reference must fail without cancellation.
+5. In disposable test resources only, interrupt voucher rebuilding/cleanup. Check the canonical claim stays CANCELLED with update PENDING and PDF export blocked. Restore the resource, retry, and verify UPDATED without changing the audit, number or file IDs. Check a failed claim without a weekly workbook can be cancelled without creating one.
+
+Earlier PDFs/printed submissions must be replaced manually. Past-week exports still require maintainer selection; cancellation does not reverse payments. Record native outcomes and the installed source fingerprint separately.

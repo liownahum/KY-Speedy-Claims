@@ -72,6 +72,14 @@ These details are proposals until confirmed or validated by the feasibility prot
 
 One submission represents one receipt and one claim row. Multiple pages of the same receipt, if supported, share a receipt number with page suffixes on their filenames. Multiple independent receipts require separate submissions. Allocation of one receipt across multiple groups is outside the initial proposal and needs a separate design if required.
 
+### Event expense categories
+
+- Finance enters an event-specific category name/letter list during setup; claimants select the category and Hardcopy/E-receipt on the form (D17).
+- An event already using categories may add another unique category and unused letter after submissions exist. Apply the list through Prepare event / apply settings on the same installation.
+- Active category names and letters remain fixed; only additions are supported. Existing claims retain their category, letter and receipt type, and receipt numbering continues across the whole event.
+- The form choices and processor's applied configuration must agree. Editing only the form's dropdown is not a supported category update.
+- Enabling categories on an already-active or already-used form that originally had none requires migration review. Tracker serial allocation and external finance-tracker synchronisation remain separate work.
+
 ### Registers and configuration
 
 The proposed event workbook stores:
@@ -103,7 +111,7 @@ The IC authorises their installation under the account intended to operate the e
 
 - This workflow collects claims and supports expenditure reporting; income collection needs a separate design.
 - Approval, payment execution, receipt OCR, and cross-event accounting integration are not initial implementation commitments.
-- Approved/paid weeks, corrections, payment-detail changes, and duplicates need explicit rules before operational use.
+- Corrections use permanent cancellation with a required reason, retained number/details/receipt, exclusion from active vouchers, and a new submission/number. Existing admin document access applies; no separate finance-role check. Approval/payment states, paid/closed-week rules and duplicate-expense detection still need explicit operational rules.
 - A documentation site does not execute the Google automation.
 - See [voucher template findings](voucher-template.md) and the [live validation record](live-validation.md) for original ranges, authorised row resizing, and successful short/long voucher export evidence. The [form pipeline](form-pipeline-test.md) is ready for manual native testing; local checks do not establish upload ownership or trigger delivery.
 

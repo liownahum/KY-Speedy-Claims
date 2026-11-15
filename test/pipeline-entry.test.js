@@ -550,6 +550,57 @@ test('empty retry batches leave the saved cursor unchanged', () => {
   assert.equal(env.properties.get('KY_CLAIM_RETRY_CURSOR'), 'r0');
 });
 
+test('cancelled claims are skipped while pending cancellations retry from saved state without a Form response', () => {
+  const env = environment();
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  const completed = { id: 'cancelled', status: 'CANCELLED', cancellation: { pending: false } };
+  const pending = { id: 'deleted-response', status: 'CANCELLED', cancellation: { pending: true } };
+  env.store.records = () => [completed, pending];
+  env.form.responses = [{ getId: () => 'cancelled' }, { getId: () => 'new' }];
+  env.context.processClaimResponse_ = response => {
+    assert.equal(response.getId(), 'new'); return { status: 'DONE' };
+  };
+  env.context.claimFilePorts_ = () => ({});
+  let repairs = 0;
+  env.context.ClaimProcessor = { repairCancellation(record) {
+    assert.equal(record.id, 'deleted-response'); repairs++; record.cancellation.pending = false; return record;
+  } };
+  const results = env.context.retryPendingClaimSubmissions();
+  assert.deepEqual(Array.from(results, item => item.id), ['new', 'deleted-response']);
+  assert.equal(results[1].status, 'CANCELLED'); assert.equal(repairs, 1);
+});
+
+test('pending cancellation repairs and response retries share the fair ten-item bound', () => {
+  const env = environment();
+  env.context.setupClaimPipeline(); env.addUpload(); env.context.activateClaimPipeline();
+  env.store.records = () => [{ id: 'cancelled', status: 'CANCELLED', cancellation: { pending: true } }];
+  env.form.responses = Array.from({ length: 12 }, (_, i) => ({ getId: () => 'r' + i }));
+  env.context.processClaimResponse_ = () => { throw new Error('Invalid response'); };
+  env.context.claimFilePorts_ = () => ({});
+  let repaired = false;
+  env.context.ClaimProcessor = { repairCancellation(record) { repaired = true; return record; } };
+  assert.equal(env.context.retryPendingClaimSubmissions().length, 10);
+  const second = env.context.retryPendingClaimSubmissions();
+  assert.equal(second.length, 10); assert.equal(repaired, true);
+  assert.equal(second[2].id, 'cancelled');
+});
+
+test('cancel entry point resolves only this event under the lock without requesting operator identity', () => {
+  assert.ok(!JSON.parse(fs.readFileSync('src/appsscript.json', 'utf8')).oauthScopes.includes('https://www.googleapis.com/auth/userinfo.email'));
+  const env = environment(); env.context.setupClaimPipeline();
+  const saved = { id: 'r1', receiptNumber: 1, reference: 'TEST-000001' };
+  env.store.records = () => [saved];
+  env.context.Session = { getActiveUser: () => assert.fail('Operator identity must not be requested') };
+  env.context.claimFilePorts_ = () => ({});
+  env.context.ClaimProcessor = { cancel(id, reason, actor) {
+    assert.equal(env.calls.at(-1)[0], 'lock');
+    assert.equal(id, 'r1'); assert.equal(reason, 'Wrong amount'); assert.equal(actor, '');
+    return { status: 'CANCELLED' };
+  } };
+  for (const number of ['000001', 'TEST-000001', 1]) assert.equal(env.context.cancelClaimSubmission(number, 'Wrong amount').status, 'CANCELLED');
+  for (const number of ['OTHER-000001', 0, '1.0', '1e0', '']) assert.throws(() => env.context.cancelClaimSubmission(number, 'Wrong amount'), /No claim/);
+});
+
 test('event-specific category and receipt-type dropdowns are required, reused and read by item ID', () => {
   const env = environment();
   env.properties.set('PIPELINE_CATEGORIES', JSON.stringify([{ name: 'Games', prefix: 'G' }, { name: 'Hospitality', prefix: 'H' }]));

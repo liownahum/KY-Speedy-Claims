@@ -27,7 +27,14 @@ function claimFilePorts_(config, store) {
     var week = store.getMeta('Weeks', key);
     if (week) {
       if (week.fullName !== record.payload.fullName || week.paymentDetails !== record.payload.paymentDetails) {
-        throw new Error('Name/payment details changed within this week; finance review is required.');
+        var conflictingActive = store.records().some(function (item) {
+          return ClaimCore.weekKey(item) === key && item.status !== 'CANCELLED' &&
+            (item.payload.fullName !== record.payload.fullName || item.payload.paymentDetails !== record.payload.paymentDetails);
+        });
+        if (conflictingActive) throw new Error('Name/payment details changed within this week; finance review is required.');
+        // All conflicting claims were cancelled: replacements may correct the header details.
+        week.fullName = record.payload.fullName;
+        week.paymentDetails = record.payload.paymentDetails;
       }
       DriveApp.getFileById(week.fileId).moveTo(DriveApp.getFolderById(person.folderId));
       return week;
@@ -79,13 +86,32 @@ function claimFilePorts_(config, store) {
     var token = Utilities.getUuid().replace(/-/g, '').slice(0, 12);
     var name = '__KY_STAGE_' + token;
     var helperName = '__KY_HELPER_' + token;
-    var original = SpreadsheetApp.openById(config.nativeTemplateId).getSheetByName('Payment Voucher (full)');
-    if (!original) throw new Error('Pristine full voucher template is missing.');
-    var stage = original.copyTo(book).setName(name);
-    var rendered = VoucherRenderer.render(book, payload, config.nativeTemplateId, { sheetName: name, configName: helperName });
+    var rendered;
+    if (!payload.claims.length) {
+      var notice = book.insertSheet(name);
+      notice.getRange('A1:B5').setValues([
+        ['NO ACTIVE CLAIMS — DO NOT SUBMIT', ''],
+        ['Claimant', VoucherCore.literal(payload.fullName)],
+        ['Week starting', payload.voucherDate],
+        ['Active total (SGD)', 0],
+        ['Earlier PDFs', 'Retained for history. Replace any previously prepared or submitted voucher.']
+      ]).setWrap(true);
+      notice.setColumnWidth(1, 300).setColumnWidth(2, 520);
+      notice.setRowHeight(5, 60);
+      SpreadsheetApp.flush();
+      if (notice.getRange('B4').getValue() !== 0) throw new Error('Empty voucher notice could not be verified.');
+      rendered = { spreadsheetId: book.getId(), sheetId: notice.getSheetId(), claimCount: 0, totalCents: 0 };
+    } else {
+      var original = SpreadsheetApp.openById(config.nativeTemplateId).getSheetByName('Payment Voucher (full)');
+      if (!original) throw new Error('Pristine full voucher template is missing.');
+      original.copyTo(book).setName(name);
+      rendered = VoucherRenderer.render(book, payload, config.nativeTemplateId, { sheetName: name, configName: helperName });
+    }
     var previous = week.rendered;
     week.garbage = previous ? [previous.sheetId, previous.helperSheetId] : week.garbage;
     week.rendered = rendered;
+    week.fullName = payload.fullName;
+    week.paymentDetails = payload.paymentDetails;
     week.fingerprint = fingerprint;
     week.revision += 1;
     // Commit the verified sheet pointer before deleting the previous sheet.
@@ -111,5 +137,13 @@ function claimFilePorts_(config, store) {
     if (active.getName() !== name) active.setName(name);
     book.setActiveSheet(active);
   }
-  return { ensurePerson: ensurePerson, ensureWeek: ensureWeek, fileReceipt: fileReceipt, renderWeek: renderWeek };
+  function rebuildCancelledWeek(record, payload) {
+    var week = store.getMeta('Weeks', ClaimCore.weekKey(record));
+    if (!week) {
+      if (record.weeklyFileId || payload.claims.length) throw new Error('Weekly voucher metadata is missing; ask the maintainer to review it.');
+      return; // Processing stopped before creating a weekly workbook.
+    }
+    return renderWeek(week, payload);
+  }
+  return { ensurePerson: ensurePerson, ensureWeek: ensureWeek, fileReceipt: fileReceipt, renderWeek: renderWeek, rebuildCancelledWeek: rebuildCancelledWeek };
 }

@@ -4,6 +4,17 @@ KY Speedy Claims helps the person in charge of an event's finances collect expen
 
 **Finance ICs use a setup spreadsheet. Claimants only need the form link.** You do not need to write code to use a prepared setup spreadsheet.
 
+**Where is KY Claims?** It is a menu at the **top of Google Sheets, beside Help**. Click it to see actions such as Start / open setup and Prepare event. There is no bottom sheet tab named KY Claims.
+
+| Name | Where to find it | What it is for |
+| --- | --- | --- |
+| **KY Claims** | Menu at the top, beside Help | Run setup, refresh, retry, cancellation and PDF actions. |
+| **KY Setup** | Sheet tab at the bottom | Enter event settings and find the form/register links. |
+| **KY Categories** | Sheet tab at the bottom | Enter this event's category names and letters. |
+| **KY Results** | Sheet tab at the bottom | Read the latest retry, cancellation or PDF-export results. |
+
+In this guide, **KY Claims → Prepare…** means open the top menu, then choose that action. If the menu is missing, see [troubleshooting](#troubleshooting). A spare blank Sheet1 tab is not used for setup.
+
 This version is a preview. Start with made-up details and sample receipts. A copied setup spreadsheet has been tested using one Google account; setup by a second finance IC using a different account still needs testing.
 
 ## Find what you need
@@ -17,6 +28,7 @@ This version is a preview. Start with made-up details and sample receipts. A cop
 | Check whether a claim was processed | [Check claims and find receipts](#check-claims-and-find-receipts) |
 | Prepare vouchers for printing | [Create the weekly PDFs](#create-the-weekly-pdfs) |
 | Deal with an incomplete claim | [Retry incomplete submissions](#retry-incomplete-submissions) |
+| Cancel an incorrect claim | [Cancel a claim and submit a replacement](#cancel-a-claim-and-submit-a-replacement) |
 | Fix a problem | [Troubleshooting](#troubleshooting) |
 
 ## Before you start
@@ -41,7 +53,7 @@ Claims contain personal and payment information. Keep the setup spreadsheet, reg
 1. Open the blank setup template supplied by your technical helper.
 2. In Google Sheets, choose **File → Make a copy**.
 3. Give the copy a clear name, such as **Claims — Youth Camp 2026**.
-4. Open your copy and choose **KY Claims → Start / open setup** from the menu at the top.
+4. In your copy, look along the top menu bar for **Help**, then **KY Claims**. Open **KY Claims → Start / open setup**. Do not look for KY Claims among the sheet tabs at the bottom.
 5. Complete Google's permission review using the event's Google account. If you are unsure about the project or requested access, check with your technical helper before continuing.
 
 The system needs permission to create the event's form, organise receipts, update spreadsheets and create PDFs. If Google asks you to run the menu action again after granting permission, choose **Start / open setup** again.
@@ -170,13 +182,14 @@ The confirmation page means your response was received. It does **not** mean the
 
 This section and the remaining sections are for the finance IC.
 
-Open your setup spreadsheet and choose **KY Claims → Refresh status**. KY Setup shows the number of completed and incomplete claims. For individual details, open **Claims register → Claims**.
+Open your setup spreadsheet and choose **KY Claims → Refresh status**. KY Setup shows completed, incomplete and cancelled claim counts. A cancelled claim awaiting a voucher update also counts as incomplete. For individual details, open **Claims register → Claims**.
 
 | Status in Claims | What it means | What to do |
 | --- | --- | --- |
 | **DONE** | The receipt has been filed and the weekly voucher updated. | Check the details. DONE does not mean approved or paid. |
 | **PENDING** | Processing has started but has not finished. | Check again after processing finishes. If it stays pending, ask your technical helper before retrying. |
 | **ERROR** | Processing stopped because something needs attention. | Read **Last error**. Fix the cause or ask your technical helper, then [retry](#retry-incomplete-submissions). |
+| **CANCELLED** | The claim is permanently excluded from active vouchers. Its number, original details and receipt remain in the register. | Check the cancellation reason and **Cancellation voucher update**. If PENDING, fix the recorded cause and retry; do not use the earlier voucher. |
 
 Use each claim's receipt link to open the filed receipt, or its weekly spreadsheet link to open that person's voucher. You can also open **Claims folder** from KY Setup and find the person's folder. It contains their **Receipts** folder, weekly spreadsheets and exported PDFs.
 
@@ -200,7 +213,25 @@ The voucher's Date currently shows the Monday of that week. Finance still needs 
 
 ### Keep the records intact
 
-Use the generated vouchers for review. Edits you make directly to a voucher can be replaced when the next claim arrives. Do not delete or change claim records, numbered receipts, hidden information or system-created tabs to fix an error. Ask your technical helper about corrections.
+Use the generated vouchers for review. Edits you make directly to a voucher can be replaced when the next claim arrives. Do not delete or change claim records, numbered receipts, hidden information or system-created tabs to fix an error. Use **Cancel claim** for an incorrect reserved claim, then arrange a new submission if needed.
+
+## Cancel a claim and submit a replacement
+
+1. Open **Claims register → Claims** and find the incorrect claim's receipt number or full reference, such as **CAMP26-000001**.
+2. In the setup spreadsheet, choose **KY Claims → Cancel claim** and enter that number or reference.
+3. Enter a reason. Check the claimant, week, description, amount and reason in the confirmation, then confirm.
+4. Check **KY Results** and the register. The status is **CANCELLED**; cancellation columns show the reason, time and whether the voucher update finished. Cancelled by shows Not recorded; the program does not collect the operator's identity.
+5. If a correction is needed, ask the claimant to submit a corrected claim with a fresh receipt upload. It receives a **new number**, using the new submission's Singapore week. The old number is never reused.
+
+Cancellation removes the claim's row and amount from its active weekly voucher. If no receipt-ready active claims remain, the workbook shows **NO ACTIVE CLAIMS — DO NOT SUBMIT** with a zero active total. No PDF is created for a week with only cancelled claims. Original register amounts and receipts remain for history, so summing the register's Amount column without filtering out CANCELLED includes cancelled amounts.
+
+Cancellation is permanent; there is no undo. A replay or retry cannot restore the claim. If rebuilding fails, the claim stays CANCELLED, **Cancellation voucher update** shows PENDING, and PDF export is blocked for that person/week. Resolve **Last error** and use **Retry incomplete submissions** to finish the voucher update.
+
+Earlier PDFs and printed copies remain unchanged. Re-export the current week and replace any previously prepared or submitted voucher. For an earlier week's revised PDF, ask your technical helper; the menu exports only the current week. Cancelling does not reverse a payment or track whether it has been paid; arrange any payment adjustment separately.
+
+Same-week name/payment details must match across active claims. To correct those details for the whole week's voucher, cancel every claim carrying the incorrect details and submit corrected replacements. Other active claims with different details still require review. Folder names may retain their earlier display name.
+
+Access uses the existing restricted admin workbooks and folders; there is no separate finance-role check. A response rejected before receiving a register row/number has no claim to cancel: ask your technical helper to review it before submitting a correction.
 
 ## Create the weekly PDFs
 
@@ -216,7 +247,7 @@ The action creates a PDF for **each person with claims in the current Singapore 
 
 If someone's claims are incomplete, their PDF is blocked so an expense is not left out. Other people's exports can still succeed. Read that person's error, resolve it and run the action again. If you are unsure how to fix it, ask your technical helper.
 
-Each export saves a **new PDF file**. Earlier PDFs remain in the folder. If more claims arrive after you export, export again and check that you are printing the updated file. KY Results shows only the most recent retry or export action; the saved PDF files remain available in the claimant folders.
+Each export saves a **new PDF file**. Earlier PDFs remain in the folder. If more claims arrive after you export, export again and check that you are printing the updated file. KY Results shows only the most recent retry, cancellation or export action; the saved PDF files remain available in the claimant folders.
 
 Creating or printing a PDF does not approve the claim or make a payment. Exports happen only when you choose this menu action; there is no automatic weekly export.
 
@@ -229,9 +260,9 @@ Use retry after the cause of a processing problem has been fixed. It asks the sy
 3. Read the results in **KY Results**.
 4. Choose **Refresh status**, then check the affected Claims rows again. A successful claim should show **DONE**.
 
-One run attempts up to ten incomplete responses. If more remain, run it again. Completed responses are skipped, and an existing claim keeps its assigned receipt number.
+One run attempts up to ten incomplete responses or pending cancellation updates. If more remain, run it again. Completed and fully cancelled responses are skipped. A pending cancellation is repaired from its saved record and stays CANCELLED; an existing claim keeps its assigned receipt number.
 
-Retrying will not correct a wrong amount or settle conflicting name/payment details. Ask finance and your technical helper to review those cases. Do not delete a claim or submit a replacement unless they have told you how to handle it.
+Retrying will not correct a wrong amount or settle conflicting name/payment details. Review the entries with the claimant, [cancel incorrect claims](#cancel-a-claim-and-submit-a-replacement), and arrange corrected submissions as needed.
 
 ## Change event settings
 
@@ -239,7 +270,18 @@ Retrying will not correct a wrong amount or settle conflicting name/payment deta
 
 Before activating a new event's form, edit **KY Categories** and choose **KY Claims → 1. Prepare event / apply settings**. The form's category dropdown will use the updated list.
 
-Once the form is active, you can add a category with an unused letter and run Prepare again. Keep existing names and letters unchanged; removing or renaming them could make older responses unclear. Existing claims keep the category and receipt type recorded when they were submitted.
+**You can add another category after claims have already been submitted**, provided this event already uses categories. For example, add Transport / T to an event that already has Games / G and Hospitality / H:
+
+1. Open the **KY Categories** tab in the same event's setup spreadsheet.
+2. Add the new category on a blank row below the existing entries, with an unused letter from A to Z. Keep the existing rows.
+3. Choose **KY Claims → 1. Prepare event / apply settings** from the top menu.
+4. Check that preparation succeeds, then open the claimant form link and confirm the new option appears under **Expense category**.
+
+The same form stays active; you do not need to create another event or activate it again. Existing claims retain their saved category, letter, receipt type, receipt number and other details. The new option is available for new submissions; adding it does not recategorise previous claims.
+
+Once the form is active, keep existing category names and letters unchanged. Additions are allowed; removal, renaming or changing an existing letter is blocked. Use a new unused name and letter for a new category.
+
+**Apply category changes through KY Categories**, rather than editing the form's choices directly. The program checks answers against its saved event list, so an option added only in the form editor can fail processing. Editing the table alone also does not update the form: run Prepare to apply it.
 
 If an older event is already active without category questions, ask your technical helper to review the upgrade. Adding category questions to an existing active or already-used form is not supported automatically. New events should enter the list before activation.
 
@@ -267,7 +309,8 @@ If someone else will take over an existing event, arrange the handover with your
 
 | What you see | What to do |
 | --- | --- |
-| No **KY Claims** menu | Open the prepared setup spreadsheet on a computer and reload it. If the menu is still missing, contact your technical helper. |
+| No bottom tab named **KY Claims** | This is expected: KY Claims is the menu at the top, beside Help. Use the KY Setup tab below for event settings. |
+| No **KY Claims** menu at the top | Open your own copy of the prepared template in Google Sheets on a computer, with permission to edit it. Wait a few seconds after opening, then reload if needed. If the menu is still missing, ask your technical helper to check that the copy includes its program. Do not create or rename a sheet tab to KY Claims. |
 | No **KY Categories** tab | Ask your technical helper to install the current version in this same event copy. Then choose **Start / open setup**. Do not replace an existing event with a new copy to work around the problem. |
 | A copied spreadsheet asks you to start setup | Choose **KY Claims → Start / open setup** in your copy. For a new event, use the blank template. |
 | Google asks you to sign in | Use the event's operating account for finance tasks, or your claimant account when submitting a receipt. |
@@ -279,7 +322,7 @@ If someone else will take over an existing event, arrange the handover with your
 | An active form refuses a category change | Keep existing names and letters. You can add a new category using an unused letter; ask your technical helper about corrections. |
 | Someone cannot open the claim form | Check that they are using the right link and account. Review responder access in the form editor; ask your technical helper if organisation restrictions apply. |
 | A claimant has a confirmation but no Claims entry | Check the form's Responses tab. Ask your technical helper to investigate; do not ask the claimant to submit the same expense again yet. |
-| A claim says name or payment details conflict | Compare this week's entries with the claimant. Ask finance and your technical helper how to correct it; retry alone will not fix it. |
+| A claim says name or payment details conflict | Compare this week's entries with the claimant. Cancel incorrect claims and arrange replacements with matching details; retry alone will not change saved answers. |
 | The event folder cannot be opened or used | Check the folder link and whether the operating Google account can add files there. Keep using the same setup spreadsheet. |
 | A PDF export failed or stopped partway | Check KY Results and the claimant folders for PDFs already created. Ask your technical helper if the cause is unclear. Another run creates new files. |
 | A PDF has missing or cut-off text, a wrong total or a damaged layout | Do not print it for submission. Keep the PDF and ask your technical helper to investigate. |
@@ -293,9 +336,9 @@ If your existing event is operated from a code editor and has no KY Claims sprea
 
 ## Current limits
 
-This preview supports one event per setup spreadsheet and one receipt file per form response. It prepares vouchers but does not approve claims, track payments, make payments or convert currencies. There is no general screen for correcting or cancelling claims, and the PDF menu covers the current week only.
+This preview supports one event per setup spreadsheet and one receipt file per form response. It prepares vouchers but does not approve claims, track payments, make payments or convert currencies. Corrections use cancellation and a new submission; saved answers cannot be edited through a correction screen. The PDF menu covers the current week only.
 
-Very long item descriptions can stop voucher processing and affect later claims for that person in the same week. Keep descriptions brief and contact your technical helper if this occurs; repeatedly retrying does not fix the text.
+Very long item descriptions can stop voucher processing and affect later claims for that person in the same week. Keep descriptions brief. If this occurs, finance can cancel the affected claim, ask for a replacement with a shorter description, and retry remaining incomplete claims; repeated retries alone do not fix saved text.
 
 The copied-workbook workflow has passed testing with one operating Google account. Independent setup by another finance IC, multi-person PDF batches, access across accounts and simultaneous submissions still need further checks. See the [validation record](live-validation.md) for the exact evidence. Agree the remaining date, correction and printing requirements with finance before official use.
 

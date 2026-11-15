@@ -102,8 +102,8 @@ test('new category columns preserve the existing register layout and saved categ
   store.saveRecord(data);
   const rows = env.tabs.get('Claims').data;
   assert.equal(rows[0][14], 'State JSON');
-  assert.deepEqual(rows[0].slice(15), ['Expense category', 'Category letter', 'Receipt type']);
-  assert.deepEqual(rows[1].slice(15), ['=Games', 'G', 'Hardcopy']);
+  assert.deepEqual(rows[0].slice(15, 18), ['Expense category', 'Category letter', 'Receipt type']);
+  assert.deepEqual(rows[1].slice(15, 18), ['=Games', 'G', 'Hardcopy']);
   assert.equal(env.open().records()[0].payload.category, '=Games');
 });
 
@@ -113,7 +113,7 @@ test('legacy register headers are extended without rewriting old claim rows and 
   data[0].length = 15; data[1].length = 15;
   const oldRow = JSON.stringify(data[1]);
   env.open();
-  assert.equal(JSON.stringify(data[1]), oldRow); assert.equal(data[0].length, 18);
+  assert.equal(JSON.stringify(data[1]), oldRow); assert.equal(data[0].length, 22);
   assert.equal(env.open().records()[0].payload.category, undefined);
   data[0][15] = 'Finance notes';
   assert.throws(() => env.open(), /occupied or changed/);
@@ -126,4 +126,32 @@ test('legacy register upgrade preserves data under unlabelled extra columns', ()
   data[0].length = 15; data[1][15] = 'Keep this finance note';
   assert.throws(() => env.open(), /unlabelled data/);
   assert.equal(data[1][15], 'Keep this finance note'); assert.equal(data[0].length, 15);
+});
+
+test('cancellation columns retain audit details and original amounts without moving existing columns', () => {
+  const env = fixture(); const store = env.open(); const data = record();
+  data.status = 'CANCELLED';
+  data.cancellation = { reason: '=Wrong amount', at: '2026-11-15T01:00:00.000Z', by: 'admin@example.com', pending: true };
+  store.saveRecord(data);
+  const row = env.tabs.get('Claims').data[1];
+  assert.equal(row[9], 12.5); assert.equal(row[10], 'CANCELLED');
+  assert.equal(row[14], JSON.stringify(data));
+  assert.deepEqual(row.slice(18), ['=Wrong amount', data.cancellation.at, 'admin@example.com', 'PENDING']);
+  data.cancellation.pending = false; store.saveRecord(data);
+  assert.equal(row[21], 'UPDATED');
+  assert.deepEqual(JSON.parse(JSON.stringify(store.records()[0].cancellation)), data.cancellation);
+});
+
+test('cancellation register migration preserves legacy rows and refuses occupied extra columns', () => {
+  const env = fixture(); const store = env.open(); store.saveRecord(record());
+  const data = env.tabs.get('Claims').data;
+  data[0].length = 18; data[1].length = 18;
+  const original = JSON.stringify(data[1]);
+  env.open(); assert.equal(JSON.stringify(data[1]), original);
+  assert.equal(data[0][18], 'Cancellation reason');
+  data[0][18] = 'Finance note';
+  assert.throws(() => env.open(), /cancellation columns are occupied/);
+  data[0].length = 18; data[1][18] = 'Keep this note';
+  assert.throws(() => env.open(), /cancellation columns contain unlabelled data/);
+  assert.equal(data[1][18], 'Keep this note');
 });
